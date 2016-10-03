@@ -1,8 +1,3 @@
-try:
-	import simplejson
-except:
-	import json as simplejson
-
 import pickle
 import numpy as np
 import random
@@ -21,13 +16,10 @@ from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import minimum_spanning_tree
 #from directions import fetch_direction
 from maps_blk import road_dist_block,road_dist_block_file
-from sptgraph import spt,print_mst_links,build_Tcsr,fibre_saved_if_wireless,handle_no_road_cases
-from sptgraph import prun_leaf_wps,get_te_route_length,make_rooted_tree,remove_nodes_from_tree
+from sptgraph import spt,print_mst_links,build_Tcsr,fibre_saved_if_wireless,handle_no_road_cases,prun_leaf_wps
 from pse_2 import latlongdist
 from copy import copy, deepcopy
-from directions import get_waypoints,update_block_waypoint
-from wireless_connectivity import get_towers_list,make_phase1_connection,make_tower_connection,get_phase1_list
-
+from directions import get_waypoints
 ########################################
 
 
@@ -51,8 +43,6 @@ from wireless_connectivity import get_towers_list,make_phase1_connection,make_to
 ########################################
 
 ##distance criteria for adjacency matrix
-TOWER_CONNECTION_LIMIT = 4
-P1_CONNECTION_LIMIT = 3
 REF_DIST = 5						##km for adjacency matrix
 htListT = [10,15,20,30,40]      ##Available heights of transmitting Towers
 htListR = [3,6,9,15]            ##Available heights of receiving Towers
@@ -62,15 +52,14 @@ upper_limit = 100000
 NUM_ZERO_HOP=0
 NUMT_ZERO_HOP=0
 NUM_FIRST_HOP=0
-MAX_ROUTE_LENGTH = 50000
-GUARD_DISTANCE = 30000
-BETA = 0.5
-KEY = 'AIzaSyDlPrrnMQmP98OsUnnPgImEnD-KpXeIcmA'
-#KEY = 'AIzaSyBOynBGgDTlSNZCTO4_n9vvSrP9rk6zB4w'
+MAX_ROUTE_LENGTH = 20000
 
-
-
-
+# KEY = 'AIzaSyDdsmMA1aSpiIVewLgVwI7yQRX75HU8P4M' #sep 16
+#KEY = 'AIzaSyBfGkszQRgiwDN1goVkgppD03OX4VTyHUw' #mahak over 15th sep
+# KEY = 'AIzaSyAlDTGjI1cpakNk--iQnAbcqrjL6H-ml5w' #jassi over sep16
+# KEY = 'AIzaSyCJGl8CM0alUexg3bfCIEf0bIDmid-Cz4A' #jassi over 15th sep
+# #KEY = 'AIzaSyCOqlyD9aAXpeVoFYMGQ0sAJpn3LSxbwiY' #mahak new
+KEY = 'AIzaSyC-E7Tfs7fEA3eGe9i0qLBHE_KJDhlbnIs' #mahak new
 # near_limit = 300
 # rear_limit = 2000
 ########################################
@@ -92,19 +81,6 @@ def get_block_hq(dijkstralist,bhqsindx):
 
 
 def do_something(input_file):
-	dist_onts = list()
-	dist_conctd_to_ph1_gps = list()
-	dist_conctd_to_tower_gps = list()
-	dist_problem_case_gps = list()
-	dist_satellite_gps = list()
-
-	tot_conctd_to_towers = 0 
-	tot_conctd_to_ph1 = 0
-	tot_onts = 0
-	tot_problem_cases = 0
-	tot_satel_recmdns = 0
-	tot_olts = 0
-	tot_ph2_gps = 0
 
 	dist_olts = 0
 	if not os.path.exists('tower'):
@@ -141,7 +117,7 @@ def do_something(input_file):
 	if not os.path.exists('fibre_all'):
 		os.makedirs('fibre_all')
 	f3=open('fibre_all/fibre_'+str(input_file)+'.csv','w')
-	f3.write('Block Code,fibre length,max. route length,No. of OLTs\n')
+	f3.write('Block Code,fibre length,max. link length,max. route length,No. of OLTs\n')
 	f3.close()
 	f3=open('fibre_all/fibre_'+str(input_file)+'.csv','a+')
 
@@ -163,18 +139,18 @@ def do_something(input_file):
 	if not os.path.exists('fibre'):
 		os.makedirs('fibre')
 	f6=open('fibre/fibre_'+str(input_file)+'.csv','w')
-	f6.write('Block Code,fibre length,max. route length,Length reduction,No. of OLTs\n')
+	f6.write('Block Code,fibre length, max. link length(km),max. route length,Length reduction,No. of OLTs\n')
 	f6.close()
 	f6=open('fibre/fibre_'+str(input_file)+'.csv','a+')
 
 	f7=open('fibre/mst_link'+str(input_file)+'.csv','w')
-	f7.write('Block Code,From_gp_name,FROM GP lat,FROM GP long,To_gp_name,TO GP Lat , TO GP Long,link length(km)\n')
+	f7.write('Block Code,FROM GP lat,FROM GP long,TO GP Lat , TO GP Long,link length(km)\n')
 	f7.close()
 	f7=open('fibre/mst_link'+str(input_file)+'.csv','a+')
 
 
 	f8=open('fibre_all/unconnected_'+str(input_file)+'.csv','w')
-	f8.write('GP Name,GP Code,Block Code,GP lat,GP long,Population,Status\n')
+	f8.write('GP Code,GP Name, Block Code,GP lat,GP long,Population,Status\n')
 	f8.close()
 	f8=open('fibre_all/unconnected_'+str(input_file)+'.csv','a+')
 
@@ -215,7 +191,7 @@ def do_something(input_file):
 	Block_code = all_data[8]
 	LatLong = all_data[6]         #lat and long of GPs
 	reqTP_mat = all_data[7][0]    #throughput required for each GP It is a list
-	# print "required throughput",reqTP_mat
+
 	Block_code=Block_code[0]
 	state = np.unique(States_list[0])
 	# print "Districts ",District_code[0]
@@ -233,14 +209,11 @@ def do_something(input_file):
 	receivHeight_mat = feas[3]
 	adjMats = [feas[4]] ##this feasibility is according to throughput
 
+
 	NODE, NODE = np.shape(adjMats[0])
-	for i in range(0,NODE):
-		for j in range(0,NODE):
-			if(adjMats[0][i][j]==1 and i!=j):
-				print "adj",i,j,adjMats[0][i][j]
-				print "thr",throughPut_mat[i][j]
-				print "txh",transHeight_mat[i][j]
-				print "rcx",receivHeight_mat[i][j]
+	#print NODE
+	
+
 	########################################################
 	tower_height = [0 for k in range(NODE)]
 	availableTP_mat = [0 for i in range(NODE)]
@@ -318,6 +291,61 @@ def do_something(input_file):
 			
 		return 0    
 
+	def connectwls(Tcsr,j):
+		conncts=0
+		#print "j = = = = ==== =",j
+		for l in range(len(Tcsr)):
+			if(Tcsr[:,l].sum()==0 and np.count_nonzero(Tcsr[l])==1 and l!=bhq): #prasanna
+				val=[value for key,value in blkx_distx.items() if key ==l][0]
+				#print "leaf node =",[l]
+				#print Tcsr[l,:].sum()
+				if(float(reqTP_mat[val]) <= 6250.0):
+					conn=connect(val,9,j)
+					if(conn ==1):
+						block_phase[j][l] = 10
+						Tcsr[l,:]=0
+						conncts+=1
+					else:
+						conn=connect(val,21,j)#what 
+						if(conn ==1):
+							block_phase[j][l] = 22
+							Tcsr[l,:]=0
+							conncts+=1
+			elif(Tcsr[l,:].sum()==0 and np.count_nonzero(Tcsr[:,l])==1 and l!=bhq):
+				val=[value for key,value in blkx_distx.items() if key ==l][0]
+				#print "leaf node =",[l]
+				#print Tcsr[:,l].sum()
+				if(float(reqTP_mat[val]) <= 6250.0):
+					conn=connect(val,9,j)
+					if(conn ==1):
+						block_phase[j][l] = 10
+						Tcsr[:,l]=0
+						conncts+=1
+					else:
+						conn=connect(val,21,j)#what 
+						if(conn ==1):
+							block_phase[j][l] = 22
+							Tcsr[:,l]=0
+							conncts+=1
+			elif(Tcsr[:,l].sum() == 0.0001 and l!=bhq):
+				val=[value for key,value in blkx_distx.items() if key ==l][0]
+				#print "Isolated node =",[l]
+				#print Tcsr[:,l].sum()
+				Tcsr[:,l]=0
+				#if(float(reqTP_mat[val]) <= 6250.0):
+				conn=connect(val,9,j)
+				if(conn ==1):
+					block_phase[j][l] = 10
+					#Tcsr[:,l]=0
+					conncts+=1
+				else:
+					conn=connect(val,21,j)#what 
+					if(conn ==1):
+						block_phase[j][l] = 22
+						#Tcsr[:,l]=0
+						conncts+=1
+		return conncts
+
 	ctt = 0
 
 	block_idx=[]
@@ -328,10 +356,16 @@ def do_something(input_file):
 			if int(Block_code[i])==j:
 				blocks1.update({i:int(Phase_lists[0][i])}) #i is id as per district rows
 		block_phase.update({j:blocks1})
+		# block_idx.append(blocks1)
 		blocks1=[]
+	#print "blocks_phase",block_phase
+	# print "block_adj = ",block_idx
+	#print "length of block_adj = ",len(block_idx)
+	#print "Block_IDX =    ",block_idx[2]
 
 	##DistMats is distance matrix for all towers and GP's of the district
 	DistMats=DistMats[0]
+	# print "DistMats", DistMats
 	##We create a distance matrix for fibre GP's & Block HQ of each block
 	# block_dist_mat =[0 for k in range(len(blocks))]
 	block_dist_mat={}
@@ -339,8 +373,10 @@ def do_something(input_file):
 	Block_MST=[]
 	road_dr_array=[]
 	LatLong_fibre=[0 for k in range(len(blocks))]
+	#latlong_dict_array= {}
 
 	##cut block distance matrix for fibre GPP's from distance matrix for whole district
+	# for j in range(len(blocks)):
 	for j in blocks: 
 		# block_dist_mat[j]=DistMats[:,block_phase[j].keys()][block_phase[j].keys(),:]
 		print "Processing block ============",j
@@ -359,16 +395,18 @@ def do_something(input_file):
 		fw=open('waypoints/waypoints_'+str(int(j))+'.csv','a+')
 
 		
-		temp_list = [x for x in block_phase[j].keys()]
-		gps_in_the_block = sorted(temp_list, key=int)
-		# gives sorted list of district wuse id's for gps in the block
-		block_waypoints_list = list()
+		# c1 = [28.032343,78.285034]
+		# c2 = [28.081664, 78.324]
+
+		# get_waypoints(c1,c2,state,dist,j,KEY)
+		# sys.exit()
+
+
+		bhq=[]
 		status2 = []
 		brk=0
 		#print block_phase[j].items()
-		#for key,value in block_phase[j].items():
-		for key in gps_in_the_block:
-			value = block_phase[j][key]
+		for key,value in block_phase[j].items():
 			if (value == 21):
 				brk=1
 				continue
@@ -383,24 +421,13 @@ def do_something(input_file):
 		for k in range(len(status2)):
 			blkx_distx.update({k:status2[k]})
 
-		bhqs=[x for x,y in block_phase[j].items() if int(y) ==15]
-		bhqs = sorted(bhqs, key=int)
-
-		print "BHQs == ",bhqs
-		
-		#Compute total number of phase 2 gps in the district
-		tot_ph2_gps += len(gps_in_the_block) - len(bhqs)
-
+		bhqs=([x for x,y in block_phase[j].items() if int(y) ==15])
 		bhqsindx=[]
 		for indx in bhqs:
 			bhqsindx.append([x for x,y in blkx_distx.items() if int(y) ==indx][0])
-		print "bhqsindx",bhqsindx,blkx_distx
+		print "bhqsindx",bhqsindx,bhqs
 
-		bhqsindx = sorted(bhqsindx, key=int)
 		bhq = bhqsindx[0]
-		if (j == 3564):
-			bhq = 1
-		bhq_id = 'gp,'+str(bhq)
 		print "UP bhq------------",bhq,status2[bhq],LatLong[status2[bhq]],LatLong[status2[bhq]],str(GP_Names[0][status2[bhq]]),str(GP_lists[0][status2[bhq]])
 		
 		
@@ -413,16 +440,15 @@ def do_something(input_file):
 					road_dr.append(0.0)
 				else:
 					try:
-						wp_list,dis=get_waypoints(LatLong[status2[l]],LatLong[status2[m]],state,dist,j,KEY)
+						wp_list,dis=get_waypoints(LatLong[status2[l]],LatLong[status2[m]],state,dist,j)
 					except IOError, e:
 						if e.errno == 101 or e.errno == 'socket error' or e.errno == -3 or e.errno == 2:
 							print "Network Error"
 							time.sleep(1)
-							wp_list,dis=get_waypoints(LatLong[status2[l]],LatLong[status2[m]],state,dist,j,KEY)
+							wp_list,dis=get_waypoints(LatLong[status2[l]],LatLong[status2[m]],state,dist,j)
 						else:
-							raise
-					wp_list_tmp = [u for u in wp_list if u != LatLong[status2[l]] and u != LatLong[status2[m]]]  
-					block_waypoints_list = update_block_waypoint(block_waypoints_list,wp_list_tmp)
+							raise    
+					
 					if dis == 0.1: #same coordinates 
 						print "Possible???", l,m,LatLong[status2[l]],LatLong[status2[m]],str(GP_Names[0][status2[m]]),str(GP_lists[0][status2[m]])
 						f9.write(str(dist)+","+str(GP_lists[0][status2[m]])+","+str(GP_Names[0][status2[m]])+","+str(LatLong[status2[m]][0])+","+str(LatLong[status2[m]][1])+",Duplicate LatLong\n")
@@ -439,9 +465,10 @@ def do_something(input_file):
 		###############################
 		# Get Waypoints for the block #
 		###############################
+
 		road_d_min = {}
 		processed_nodes = [bhq]
-		#block_waypoints_list = list() #list of block waypoints  
+		block_waypoints_list = list() #list of block waypoints  
 		for l in range(len(status2)): #Initialization Loop
 			if l > bhq:
 				road_d_min.update({str(l)+','+','.join([str(x) for x in LatLong[status2[bhq]]]) : road_d[bhq][l]})
@@ -466,21 +493,26 @@ def do_something(input_file):
 
 			try:
 				#print "distance not there in file"
-				waypoints_list,d = get_waypoints(x_latlong,LatLong[status2[int(x_list[0])]],state,dist,j,KEY) 
+				waypoints_list,d = get_waypoints(x_latlong,LatLong[status2[int(x_list[0])]],state,dist,j) 
 			except IOError, e:
 				if e.errno == 101 or e.errno == 'socket error' or e.errno == -3 or e.errno == 2:
 					print "Network Error"
 					time.sleep(1)
-					waypoints_list,d = get_waypoints(x_latlong,LatLong[status2[int(x_list[0])]],state,dist,j,KEY) 
+					waypoints_list,d = get_waypoints(x_latlong,LatLong[status2[int(x_list[0])]],state,dist,j) 
 				else:
 					raise
-			wp_list_tmp = [u for u in waypoints_list if u != LatLong[status2[int(x_list[0])]]]
-			block_waypoints_list = update_block_waypoint(block_waypoints_list,wp_list_tmp)
 
 
 
-			# print "Waypoints List:::",waypoints_list
+			print "Waypoints List:::",waypoints_list
 			
+			for w in waypoints_list:
+				print "Check1:::",w
+				if LatLong[status2[int(x_list[0])]] == w:
+					continue
+				else:
+					if w not in block_waypoints_list:
+						block_waypoints_list.append(w)
 			
 			for x,y in road_d_min.items():
 				rd_min = y
@@ -489,17 +521,14 @@ def do_something(input_file):
 				for l in waypoints_list:
 					try:
 						#print "distance not there in file"
-						wp_temp,rd = get_waypoints(gp_latlong,l,state,dist,j,KEY)
+						wp_temp,rd = get_waypoints(gp_latlong,l,state,dist,j)
 					except IOError, e:
 						if e.errno == 101 or e.errno == 'socket error' or e.errno == -3 or e.errno == 2:
 							print "Network Error"
 							time.sleep(1)
-							wp_temp,rd = get_waypoints(gp_latlong,l,state,dist,j,KEY)
+							wp_temp,rd = get_waypoints(gp_latlong,l,state,dist,j)
 						else:
 							raise 
-					wp_list_tmp = [u for u in waypoints_list if u != gp_latlong]
-					block_waypoints_list = update_block_waypoint(block_waypoints_list,wp_list_tmp)
-
 					
 					#rd = road_dist_block(gp_latlong,l,state,dist,j,KEY)
 					if rd < rd_min:
@@ -509,14 +538,12 @@ def do_something(input_file):
 				if rd_min < y:
 					del road_d_min[x]
 					road_d_min.update({x.split(',')[0]+','+','.join([str(u) for u in rd_min_latlong]):rd_min})
-		
-		block_waypoints_list = [u for u in block_waypoints_list if u not in [LatLong[status2[v]] for v in range(len(status2))]]
 			
 		############################################
 		# Finished Getting Waypoints for the block #
 		############################################
 
-		#print "All waypoints in the block",block_waypoints_list,[LatLong[status2[v]] for v in range(len(status2))]
+		print "All waypoints in the block",block_waypoints_list
 		#sys.exit()
 
 		##################################
@@ -524,685 +551,562 @@ def do_something(input_file):
 		##################################
 
 		## Make the underlyting graph with gps and wps ##
-		original_graph = dict()
-		#key = node and value = [ [node,road_dist] ]
-		#Creating nodes in the graph
-		for l in range(len(status2)):
-			original_graph.update({'gp,'+str(l):[]})
-		for l in range(len(block_waypoints_list)):
-			original_graph.update({'wp,'+str(l):[]})
+		# original_graph = dict()
+		# #key = node and value = [ [node,road_dist] ]
+		# #Creating nodes in the graph
+		# for l in range(len(status2)):
+		# 	original_graph.update({'gp,'+str(l):[]})
+		# for l in range(len(block_waypoints_list)):
+		# 	original_graph.update({'wp,'+str(l):[]})
 
-		for l in range(len(status2)):
-			l_key = 'gp,'+str(l)
+		# for l in range(len(status2)):
+		# 	l_key = 'gp,'+str(l)
 			
-			for m in range(l+1,len(status2)):
-				m_key = 'gp,'+str(m)
-				#d_chk = road_dist_block_file(LatLong[status2[l]],LatLong[status2[m]],state,dist,j)
-				d_chk = road_dist_block(LatLong[status2[l]],LatLong[status2[m]],state,dist,j)
-				if d_chk > 0:
-					original_graph[l_key].append([m_key,d_chk])
-					original_graph[m_key].append([l_key,d_chk])
-			print "Done making gp to gp adjacency for",GP_Names[0][status2[l]]
+		# 	for m in range(l+1,len(status2)):
+		# 		m_key = 'gp,'+str(m)
+		# 		#d_chk = road_dist_block_file(LatLong[status2[l]],LatLong[status2[m]],state,dist,j)
+		# 		d_chk = road_dist_block(LatLong[status2[l]],LatLong[status2[m]],state,dist,j)
+		# 		if d_chk > 0:
+		# 			original_graph[l_key].append([m_key,d_chk])
+		# 			original_graph[m_key].append([l_key,d_chk])
+		# 	print "Done making gp to gp adjacency for",GP_Names[0][status2[l]]
 			
-			for m in range(len(block_waypoints_list)):
-				m_key = 'wp,'+str(m)
-				d_chk = road_dist_block_file(LatLong[status2[l]],block_waypoints_list[m],state,dist,j)
-				if d_chk > 0:
-					original_graph[l_key].append([m_key,d_chk])
-					original_graph[m_key].append([l_key,d_chk])
-			print "Done making gp to wp adjacency!!!",GP_Names[0][status2[l]]
+		# 	for m in range(len(block_waypoints_list)):
+		# 		m_key = 'wp,'+str(m)
+		# 		d_chk = road_dist_block_file(LatLong[status2[l]],block_waypoints_list[m],state,dist,j)
+		# 		if d_chk > 0:
+		# 			original_graph[l_key].append([m_key,d_chk])
+		# 			original_graph[m_key].append([l_key,d_chk])
+		# 	print "Done making gp to wp adjacency!!!",GP_Names[0][status2[l]]
 
-		for l in range(len(block_waypoints_list)):
-			l_key = 'wp,'+str(l)
+		# for l in range(len(block_waypoints_list)):
+		# 	l_key = 'wp,'+str(l)
 			
-			for m in range(l+1,len(block_waypoints_list)):
-				m_key = 'wp,'+str(m)
-				d_chk = road_dist_block_file(block_waypoints_list[l],block_waypoints_list[m],state,dist,j)
-				if d_chk > 0:
-					original_graph[l_key].append([m_key,d_chk])
-					original_graph[m_key].append([l_key,d_chk])	
-		print "Done making wp to wp adjacency!!!"		
+		# 	for m in range(l+1,len(block_waypoints_list)):
+		# 		m_key = 'wp,'+str(m)
+		# 		d_chk = road_dist_block_file(block_waypoints_list[l],block_waypoints_list[m],state,dist,j)
+		# 		if d_chk > 0:
+		# 			original_graph[l_key].append([m_key,d_chk])
+		# 			original_graph[m_key].append([l_key,d_chk])	
+		# print "Done making wp to wp adjacency!!!"		
 
-		print "original graph ------",len(original_graph)		
+		# print "original graph ------",len(original_graph)		
 
-		no_neighbor_nodes = []
-		for x,y in original_graph.items():
-			if y == []:
-				print "Node is not connected to anything::::", x
-				no_neighbor_nodes.append(x)
+		# no_neighbor_nodes = []
+		# for x,y in original_graph.items():
+		# 	if y == []:
+		# 		print "Node is not connected to anything::::", x
+		# 		no_neighbor_nodes.append(x)
 
-		#sys.exit()
-
-		
-		## Building the Tree from the graph ##	
-
-		tree_with_wps = dict()
-		# key = node and value = parent id, link lenght, [children], route length from bhq
-		#node_status = dict() #whether nodes are in or out of the current tree
-		
-		for x in original_graph.keys():
-			init_tree_value_list = [None,0,[],0]
-			if x == 'gp,'+str(bhq):
-				y = 'in'
-			else:
-				y = 'out'
-			init_tree_value_list.append(y)
-			init_tree_value_list.append(0)
-			tree_with_wps.update({x:init_tree_value_list})
-
-		# print "Tree with wps:::", tree_with_wps
-
-		last_added = 'gp,'+str(bhq)
-		# print "Tree initial values::", tree_with_wps,last_added
-		not_yet_connected = [x for x in tree_with_wps.keys() if tree_with_wps[x][4] == 'out']
-
-		# print "Not yet connected 1:::",not_yet_connected
-
-		#while (len(not_yet_connected) > 0):
-		while (len(not_yet_connected) > len(no_neighbor_nodes)):
-			#last_added_adj_list = original_graph[last_added]
-			#print "LAST ADDED====",last_added,not_yet_connected
-			for x in original_graph[last_added]: 
-				#print "Last added x==== ",x #original_graph[last_added]
-
-				x_id = x[0]
-				x_dist_from_last_added = x[1]
-
-
-				#if tree_with_wps[x_id][4] == 'in':
-				if x_id not in not_yet_connected:
-					#print "The Neighbours are connected",tree_with_wps[x_id]
-					continue
-				else:
-					#print "Processing Node === ",tree_with_wps[x_id]
-					if tree_with_wps[x_id][0] == None:
-						tree_with_wps[x_id][0] = last_added
-						tree_with_wps[x_id][1] = x[1]
-						tree_with_wps[x_id][3] = tree_with_wps[last_added][3] + x[1]
-						tree_with_wps[x_id][5] = tree_with_wps[x_id][1] + BETA*tree_with_wps[x_id][3]
-					else:
-						if tree_with_wps[x_id][5] > x[1] + BETA*(tree_with_wps[last_added][3]+x[1]):
-							tree_with_wps[x_id][1] = x[1]
-							tree_with_wps[x_id][0] = last_added
-							tree_with_wps[x_id][3] = tree_with_wps[last_added][3] + x[1]
-							tree_with_wps[x_id][5] = tree_with_wps[x_id][1] + BETA*tree_with_wps[x_id][3]
-
-			min_length = 10000000000000000
-			min_length_id = not_yet_connected[0] 
-			for x in [y for y in not_yet_connected if tree_with_wps[y][0] != None]:
-				if tree_with_wps[x][5] < min_length: #for MST 
-					min_length = tree_with_wps[x][5]
-					min_length_id = x
-
-			if min_length == 10000000000000000: # No more nodes can be connected to the tree
-				print "Not yet conncted == ", not_yet_connected
-				break
-				#sys.exit()
-
-			#print "Chosen Node for addition to tree == ",min_length_id,min_length,tree_with_wps[min_length_id]
-			tree_with_wps[min_length_id][4] = 'in'
-			tree_with_wps[tree_with_wps[min_length_id][0]][2].append(min_length_id)
-
-			last_added = min_length_id
-			not_yet_connected = [x for x in tree_with_wps.keys() if tree_with_wps[x][4] == 'out']
-
-		print "Not yet connected:::",len(not_yet_connected),not_yet_connected,no_neighbor_nodes
-
-		for y in [u for u in tree_with_wps.keys() if tree_with_wps[u][4] == 'out']:
-			del tree_with_wps[y]
+		# #sys.exit()
 
 		
+		# ## Building the Tree from the graph ##	
 
-
-		# print "B4 HANDLE NO ROAD DATA === ", tree_with_wps
-
-		tree_with_wps,sattelite_reco_list = handle_no_road_cases(tree_with_wps,LatLong,block_waypoints_list,status2,state,dist) 
-		#Handles no road data cases
-		# print "B4 HANDLE NO ROAD DATA === ", tree_with_wps,sattelite_reco_list
-
-		tree_with_wps = prun_leaf_wps(tree_with_wps) #Removes leaf wp's
-
-		#remove te's and wp's from satellite recommendations
-		sattelite_reco_list = [u for u in sattelite_reco_list if u.split(',')[0] == 'gp' and Phase_lists[0][status2[int(u.split(',')[1])]]!=15]			
-
-		print "Satellite Recommendations:::",sattelite_reco_list
-		# print "Tree with wps::::", tree_with_wps
+		# tree_with_wps = dict()
+		# # key = node and value = parent id, link lenght, [children], route length from bhq
+		# #node_status = dict() #whether nodes are in or out of the current tree
 		
-		############################################################
-		# Get Route length along tree from each Telephone Exchange # 
-		############################################################
+		# for x in original_graph.keys():
+		# 	init_tree_value_list = [None,0,[],0]
+		# 	if x == 'gp,'+str(bhq):
+		# 		y = 'in'
+		# 	else:
+		# 		y = 'out'
+		# 	init_tree_value_list.append(y)
+		# 	tree_with_wps.update({x:init_tree_value_list})
 
-		te_route_length_dict = dict()
-		# key is TE node ID and value is dict containing {node_id:route_legth}
+		# # print "Tree with wps:::", tree_with_wps
 
-		for x in bhqs: 
-			te_id = 'gp,'+str(status2.index(x))
-			if te_id in tree_with_wps.keys():
-				# print "TREE WITH WPS====",tree_with_wps
-				te_route_length_dict.update({te_id:get_te_route_length(tree_with_wps,te_id)})
+		# last_added = 'gp,'+str(bhq)
+		# not_yet_connected = [x for x in tree_with_wps.keys() if tree_with_wps[x][4] == 'out']
 
-		###############################################################################
-		# Find Problem cases, nodes with distance > MAX_ROUTE_LENGTH from chosen BHQs #
-		###############################################################################
+		# # print "Not yet connected 1:::",not_yet_connected
 
-		#min_route_length = [10000000000 for x in range(len(tree_dist[0]))]
-		
-		
-		# bhq_id = 'gp,'+str(bhq)
+		# #while (len(not_yet_connected) > 0):
+		# while (len(not_yet_connected) > len(no_neighbor_nodes) ):
+		# 	#last_added_adj_list = original_graph[last_added]
+		# 	for x in original_graph[last_added]: 
+		# 		#print "Last added x==== ",x #original_graph[last_added]
+
+		# 		x_id = x[0]
+		# 		x_dist_from_last_added = x[1]
+
+		# 		#if tree_with_wps[x_id][4] == 'in':
+		# 		if x_id not in not_yet_connected:
+		# 			continue
+		# 		else:
+		# 			if tree_with_wps[x_id][0] == None:
+		# 				tree_with_wps[x_id][0] = last_added
+		# 				tree_with_wps[x_id][1] = x[1]
+		# 				tree_with_wps[x_id][3] = tree_with_wps[last_added][3] + x[1]
+		# 			else:
+		# 				if tree_with_wps[x_id][1] > x[1]:
+		# 					tree_with_wps[x_id][1] = x[1]
+		# 					tree_with_wps[x_id][0] = last_added
+		# 					tree_with_wps[x_id][3] = tree_with_wps[last_added][3] + x[1]
+
+		# 	min_length = 10000000000000000
+		# 	for x in [y for y in not_yet_connected if tree_with_wps[y][0] != None]:
+		# 		if tree_with_wps[x][1] < min_length:
+		# 			min_length = tree_with_wps[x][1]
+		# 			min_length_id = x
+
+		# 	tree_with_wps[min_length_id][4] = 'in'
+		# 	tree_with_wps[tree_with_wps[min_length_id][0]][2].append(min_length_id)
+
+		# 	last_added = min_length_id
+		# 	not_yet_connected = [x for x in tree_with_wps.keys() if tree_with_wps[x][4] == 'out']
+
+		# print "Not yet connected:::",len(not_yet_connected),not_yet_connected,no_neighbor_nodes
+
+		# tree_with_wps,sattelite_reco_list = handle_no_road_cases(tree_with_wps,LatLong,block_waypoints_list,status2,state,dist) 
+		# #Handles no road data cases
+		# tree_with_wps = prun_leaf_wps(tree_with_wps) #Removes leaf wp's
+
+		# print "Satellite Recommendations:::",sattelite_reco_list
+
+
+		# mst_link_list = list()
+		# #mst_link_dict = print_mst_links('gp,'+str(bhq),tree_with_wps,mst_link_dict)
+
+		# tot_mst_links = 0
 		# for x in tree_with_wps.keys():
-		# 	olt_assigned_dict.update({x:bhq_id}) #initially every point is connected to bhq
+		# 	if tree_with_wps[x][2] != []:
+		# 		tot_mst_links += len(tree_with_wps[x][2])
+		# 		for y in tree_with_wps[x][2]:
+		# 			mst_link_list.append([x,y])
+		
+
+		# print "mst_link_list::::::",len(mst_link_list),tot_mst_links,mst_link_list
+
+		# ## Print MST links in the file ##
+		# # ff = open('mst_links.csv','w')
+		# # ff.write('Block code,From GP Name,From GP Lat,From GP Long,To GP Name,To GP Lat,To GP Long,Link Length(km)\n')
+		# # ff.write()
+		# for x in mst_link_list:
+		# 	x_from = x[0].split(',')[0]
+		# 	x_to = x[1].split(',')[0]
+		# 	gp_from_name = ' '
+		# 	gp_to_name = ' ' 
+			
+		# 	if x_from == 'wp':
+		# 		from_latlong =  block_waypoints_list[int(x[0].split(',')[1])]
+			
+		# 	elif x_from == 'gp':
+		# 		from_latlong = LatLong[status2[(int(x[0].split(',')[1]))]]
+		# 		gp_from_name = GP_Names[0][status2[(int(x[0].split(',')[1]))]]
+			
+		# 	if x_to == 'wp':
+		# 		to_latlong =  block_waypoints_list[int(x[1].split(',')[1])]
+			
+		# 	elif x_to == 'gp':
+		# 		#print "Debug gp name printing problem:::",x
+		# 		to_latlong = LatLong[status2[int(x[1].split(',')[1])]]
+		# 		gp_to_name = GP_Names[0][status2[(int(x[1].split(',')[1]))]]
+
+		# 	#print str(j),gp_from_name,str(from_latlong[0]),str(from_latlong[1]),gp_to_name,str(to_latlong[0]),str(to_latlong[1]),tree_with_wps[x[1]][1]
+	
+				
+		# 	f5.write(str(j)+ ", " + gp_from_name +',' + str(from_latlong[0]) + ", "+ str(from_latlong[1]) + "," + gp_to_name + ',' + str(to_latlong[0]) + "," +str(to_latlong[1]) +',' + str(float(tree_with_wps[x[1]][1]/1000.0)) + '\n' )
+
+# 		sys.exit()
+# 		#list_of_connected_nodes = set( mst_link_dict.keys() + mst_link_dict.values() )
 		 
-		problem_cases = [x for x,y in tree_with_wps.items() if y[3] > MAX_ROUTE_LENGTH and y[3] < 1000000]
+# 		# list_of_connected_nodes.append(mst_link_dict.values())
+# 		#print list_of_connected_nodes,len(list_of_connected_nodes)
+
+# 		# for x in original_graph.keys():
+# 		# 	if x not in list_of_connected_nodes:
+# 		# 		# print "not in tree", x
+# 		# 		print "details of node not in tree ", tree_with_wps[x],"parent details -------", tree_with_wps[tree_with_wps[x][0]]
+# 		# unique_nodes = set(list_of_connected_nodes)
+
+# 		# print unique_nodes,len(unique_nodes)
 
 		
+# 		# print "latlong_dict_array",latlong_dict_array  
+# 		#road_dr_array=np.array(road_d)
+# 		#road_dr_array=np.reshape(road_dr_array,(len(status2),len(status2)))
+# 		#print "length of road_dr_array------",len(road_dr_array)
+# 		#X=csr_matrix(road_dr_array)
+
+# 		#Tcsr1= minimum_spanning_tree(X)
+# 		#print "mst===========",Tcsr1
+# 		#Tcsr=Tcsr1.toarray().astype(float)
 		
-		# for x in problem_cases:
-		# 	problem_case_gps.append(x, block_phase[j][status2[(int(x.split(',')[1]))]])
-		# print "prob case gps " 
-		#sys.exit() #Prasanna
+# 		#################
+# 		# Building Tcsr #
+# 		#################
+# 		#print "Treeeeeee dicttttt",tree_dict
 
-		all_olts = [bhq_id] 
-		resolvable_cases_dict = dict()
-		#key = bhq id and value = list of problem cases that can be resolved by the gp
+# 		#Tcsr = list()
 
-		if len(problem_cases) > 0: #If problem cases exist
-			while True:
-				for x in bhqs: #Process for all TEs
- 					if x in all_olts: #If already chosen as OLT location do nothing
-						continue
-					x_id = 'gp,'+str(status2.index(x))
-					resolvable_cases_dict.update({x_id:[]})
 
-					resolvable_cases_dict[x_id] = [y for y in problem_cases if te_route_length_dict[x_id][y] < MAX_ROUTE_LENGTH]
+# 		# print "TREEE  ",tree_with_wps
+# 		# sys.exit()	
+# 		u = 0
 
-				most_resolved = 0
+# 		Tcsr = list()
+# 		for x in range(len(status2)):
+# 			Tcsr.append([])
+# 			for y in range(len(status2)):
+# 				Tcsr[x].append(0)
 
-				for x in resolvable_cases_dict.keys():
-					if len(resolvable_cases_dict[x]) > most_resolved:
-						most_resolved = len(resolvable_cases_dict[x])
-						most_resolving_te = x 
+# 		Tcsr = build_Tcsr('gp,'+str(bhq),tree_with_wps,Tcsr,'gp,'+str(bhq))
+# 		Tcsr = np.array(Tcsr)
+# 		for x in range(len(status2)):
+# 			for y in range(len(status2)):
+# 				if Tcsr[x][y] > 0 :
+# 					u += 1
+# 					print "Printing Tcsr === ",LatLong[status2[x]],LatLong[status2[y]],Tcsr[x][y]
 
-				if most_resolved == 0:
-					break
-				else:
-					all_olts.append(most_resolving_te)
-					problem_cases = [y for y in problem_cases if y not in resolvable_cases_dict[most_resolving_te]]
 
-		# Problem cases should not contain wp's and te's
-		problem_cases = [u for u in problem_cases if u.split(',')[0] == 'gp' and Phase_lists[0][status2[int(u.split(',')[1])]]!=15]			
-		# print "Chosen OLTs =", all_olts
-		print "Remaining Problem cases = ", problem_cases 
-		#Remove problem cases from tree
+# 		Orig_Tcsr=deepcopy(Tcsr)
 
-		tree_with_wps = remove_nodes_from_tree(tree_with_wps,problem_cases)
 
-		##########################################################################
-		# Assign nodes to the chosen OLT locations based on the closest distance #
-		##########################################################################
+# 		#print Tcsr
+# 		print "Correct Tcsr?",u, len(status2)
 
-		olt_assigned_dict = dict()
-		#key = node_id and value = id of olt location to which it will connect
+# 		sys.exit()
 
-		for x in all_olts:
-			olt_assigned_dict.update({x:[]})
 
-		for y in tree_with_wps.keys():
-			min_tree_dist = 10000000
+# 		if not os.path.exists('fibre_all/mstnpy'):
+# 			os.makedirs('fibre_all/mstnpy')
+# 		np.save('./fibre_all/mstnpy/mst_'+str(input_file),np.array(Tcsr))
 
-			for x in all_olts:
-				if te_route_length_dict[x][y] < min_tree_dist:
-					min_tree_dist = te_route_length_dict[x][y]
-					min_tree_dist_olt = x
 
-			olt_assigned_dict[min_tree_dist_olt].append([y,"{:0.2f}".format(min_tree_dist)])
 
-		#print "OLT assigned :::: ", olt_assigned_dict #olts as key and its nodes as children 
+# 		#print "TCSR = ", Tcsr
+# 		dijkstralist=list()
+# 		count = 0
+# 		#print status2, len(status2),range(len(status2))
+# 		for l in range(len(status2)):
+# 			for m in range(len(status2)):
+# 				if Tcsr[l][m] > 0:
+# 					count +=1
+# 					smalllist=list()
+# 					smalllistrev=list()
+# 					smalllist.append(l)
+# 					smalllist.append(m)
+# 					smalllist.append(Tcsr[l][m])
+# 					smalllistrev.append(m)
+# 					smalllistrev.append(l)
+# 					smalllistrev.append(Tcsr[l][m])
+# 					dijkstralist.append(smalllist)
+# 					dijkstralist.append(smalllistrev)
+# 		print "count ======",count
+# 		#bhq=get_block_hq(dijkstralist,bhqsindx)
+# 		tree_dist=list()
+# 		over_sixty=list()
+# 		print "Entering SPT ##############",len(bhqsindx),bhqsindx
+# 		for l in range(len(bhqsindx)):
+# 			tree_dist_temp,over_sixty_temp = spt(dijkstralist,str(bhqsindx[l]),1)
+# 			tree_dist.append(tree_dist_temp)
+# 			over_sixty.append(over_sixty_temp)
+# 			print tree_dist[l], len(tree_dist[l]), len(status2), over_sixty[l]
+# 		# bhq = bhqsindx[0]
+# 		# print "UP bhq------------",bhq,status2[bhq],LatLong[status2[bhq]],LatLong[status2[bhq]],str(GP_Names[0][status2[bhq]]),str(GP_lists[0][status2[bhq]])
+# 		# #bhq = bhqsindx[over_sixty.index(min(over_sixty))] # selecting bhq based on minimum oversixty route-lengths
+# 		all_olts = [bhq]
+# 		#check tree distance from bhq > 1000000 call satellite 
+# 		print "BHQ (finally!) ===== ",bhq,over_sixty.index(min(over_sixty))
+# 		#sys.exit()
 
-		####### Construct rooted trees corresponding to diffent OLTs ########
+# 		# no_road_data_list = [x for x in range(len(tree_dist[0])) if (tree_dist[0][x] > 1000000) and (Phase_lists[0][status2[x]] == 2)]
 
-		olt_trees_with_wps = dict()
+# 		# new_association = satellite_recommendation(no_road_data_list) #getting dict with key i (in no_road_data) and value k,dist(i,k)*1.2
 		
-		if len(all_olts) == 1:
-			olt_trees_with_wps.update({bhq_id: tree_with_wps})
-		else:
-			for x in all_olts:
-				olt_tree = {x:[None,0,[],0]}
-				parent = tree_with_wps[x][0]
-				nodes_to_be_checked = [y for y in tree_with_wps[x][2]]
-				if parent == None:
-					olt_trees_with_wps.update({x:make_rooted_tree(x,tree_with_wps,olt_assigned_dict[x],olt_tree,nodes_to_be_checked)})
-				else:
-					nodes_to_be_checked.append(parent)
-					olt_trees_with_wps.update({x:make_rooted_tree(x,tree_with_wps,olt_assigned_dict[x],olt_tree,nodes_to_be_checked)})
+# 		# for i in new_association.keys():
+# 		# 	k = int(new_association[i][0])
+# 		# 	if i < k:
+# 		# 		Tcsr[i][k] = new_association[i][1]
+# 		# 	else:
+# 		# 		Tcsr[k][i] = new_association[i][1]
 
-
-					#prasanna
-				#print "OLT TREE== ",x,olt_trees_with_wps[x]
-
-				for y in [z[0] for z in olt_assigned_dict[x]]:
-					if y not in olt_trees_with_wps[x].keys():
-						print "Node not in tree::::::::::::::::::",x,y
-						sys.exit()
-
-		#sys.exit()
-				
-
-		fibre_all_len = 0
-		fibre_all_max_route_length = 0
-
-		for z in olt_trees_with_wps.keys():
-
-			olt_trees_with_wps[z] = prun_leaf_wps(olt_trees_with_wps[z]) #Removes leaf wp's
-			mst_link_list = list()
-			#mst_link_dict = print_mst_links('gp,'+str(bhq),tree_with_wps,mst_link_dict)
-
-			tot_mst_links = 0
-			for x in olt_trees_with_wps[z].keys():
-				if olt_trees_with_wps[z][x][2] != []:
-					tot_mst_links += len(tree_with_wps[x][2])
-					if fibre_all_max_route_length < olt_trees_with_wps[z][x][3]:
-						fibre_all_max_route_length = olt_trees_with_wps[z][x][3]
-					for y in olt_trees_with_wps[z][x][2]:
-						fibre_all_len += int(olt_trees_with_wps[z][y][1])
-						mst_link_list.append([x,y])
-				#Add in olt_connections, where olt is z and node connected to it is x
-
-			
-
-			# print "mst_link_list::::::",len(mst_link_list),tot_mst_links,mst_link_list
-
-			## Print MST links in the file ##
-			for x in mst_link_list:
-				x_from = x[0].split(',')[0]
-				x_to = x[1].split(',')[0]
-				gp_from_name = ' '
-				gp_to_name = ' ' 
-				
-				if x_from == 'wp':
-					from_latlong =  block_waypoints_list[int(x[0].split(',')[1])]
-				
-				elif x_from == 'gp':
-					from_latlong = LatLong[status2[(int(x[0].split(',')[1]))]]
-					gp_from_name = GP_Names[0][status2[(int(x[0].split(',')[1]))]]
-				
-				if x_to == 'wp':
-					to_latlong =  block_waypoints_list[int(x[1].split(',')[1])]
-				
-				elif x_to == 'gp':
-					#print "Debug gp name printing problem:::",x
-					to_latlong = LatLong[status2[int(x[1].split(',')[1])]]
-					gp_to_name = GP_Names[0][status2[(int(x[1].split(',')[1]))]]
-
-				#print str(j),gp_from_name,str(from_latlong[0]),str(from_latlong[1]),gp_to_name,str(to_latlong[0]),str(to_latlong[1]),tree_with_wps[x[1]][1]
-		
+# 		# 	for l in range(len(bhqsindx)):
+# 		# 		if tree_dist[l][i] < 1000000:
+# 		# 			print "====ERROR in tree_dist update===",j,l,i,tree_dist[l][i]
+# 		# 			sys.exit()
 					
-				f5.write(str(j)+ ", " + gp_from_name +',' + str(from_latlong[0]) + ", "+ str(from_latlong[1]) + "," + gp_to_name + ',' + str(to_latlong[0]) + "," +str(to_latlong[1]) +',' + str(float(tree_with_wps[x[1]][1]/1000.0)) + '\n' )
-		f3.write(str(j)+','+str(fibre_all_len/1000)+'km,'+ str(fibre_all_max_route_length/1000) + ','+ str(len(all_olts)) +'\n')
+# 		# 		tree_dist[l][i] = tree_dist[l][k] + new_association[i][1]
 		
-		# print "olt tree with wps",olt_trees_with_wps		
-		tree_with_wireless = deepcopy(olt_trees_with_wps)
-		# print "olt tree with wireless",tree_with_wireless
+# 		no_road_data_list = [x for x in range(len(tree_dist[0])) if (tree_dist[0][x] > 1000000) and (Phase_lists[0][status2[x]] == 2)]
 
-		tower_connect_dict = dict()
-		#key = tower id, value = list of gps connected to the tower
-
-		phase1_connect_dict = dict()
-		#key = phase1_gp_id, value = list of gps connected to the tower
-
-		towers_list = get_towers_list(Phase_lists[0],NODE)
-		phase1_list = get_phase1_list(Phase_lists[0],NODE)
-
-		print "Tower List = ", towers_list
-
-		for z in towers_list:
-			tower_connect_dict.update({z:[]})
-		for z in phase1_list:
-			phase1_connect_dict.update({z:[]})
+# 		# Prasanna
 
 
-		connect_flag = 'TOWER'
-		print "\n\n\n\n\nLEN OF OLT, block code",len(olt_trees_with_wps.keys()),j
 
-		problem_cases += [u for u in not_yet_connected if u.split(',')[0] == 'gp']
-
-		while  True:
-			if connect_flag == 'TOWER':
-				link = make_tower_connection(None,problem_cases,towers_list,adjMats[0],reqTP_mat,status2)
-			else:
-				link = make_phase1_connection(None,problem_cases,phase1_list,adjMats[0],reqTP_mat,status2)
+# 		print "No road data list::", no_road_data_list
+# 		if no_road_data_list != []:
+# 			new_association = satellite_recommendation(no_road_data_list) #getting dict with key i (in no_road_data) and value k,dist(i,k)*1.2
+# 			print "Print New Association::", new_association
+# 			print "New association Keys!!",new_association.keys()
+# 			#sys.exit()
 			
-			if link == {}:
-					if connect_flag == 'TOWER':
-						connect_flag = "PHASE1"
-						continue
-					else:
-						break
-			else:
-				leaf_gp_index = int(link.keys()[0].split(',')[1])
-				leaf_gp_id = link.keys()[0]
-				min_arial_dist = 100000000000000
-				for x in link[leaf_gp_id]:
-					arial_dist = latlongdist(LatLong[status2[leaf_gp_index]],LatLong[x])
-					if arial_dist < min_arial_dist:
-						min_arial_dist = arial_dist
-						min_dist_node = x
+		
+# 			for i in new_association.keys():
+# 				k = int(new_association[i][0])
+# 				Tcsr[i,:] = 0
+# 				Tcsr[:,i] = 0
+# 				print "New association:::",i,new_association[i],k
+# 				if float(new_association[i][1]) == 0:
+# 					print "Error:: Zero arial distance!!!!!!"
+# 					sys.exit()
+# 				if int(i) < int(k):
+# 					Tcsr[i][k] = float(new_association[i][1])
+# 				elif int(k) < int(i):
+# 					Tcsr[k][i] = float(new_association[i][1])
+# 				else: #eRROR HANDLING
+# 					print "Error::i cannot be same as k!!!", i,k
+# 					sys.exit()
 
-				if connect_flag == 'TOWER':
-					print "Problem case Connected to Tower::",min_dist_node,leaf_gp_id
-					tower_connect_dict[min_dist_node].append(leaf_gp_id) #connection added to the chosen tower
-					if len(tower_connect_dict[min_dist_node]) >= TOWER_CONNECTION_LIMIT:
-						towers_list = [u for u in towers_list if u != min_dist_node] #Remove tower if it has max connections
-				else:
-					print "Problem Case Connected to Phase1::",min_dist_node,leaf_gp_id
-					phase1_connect_dict[min_dist_node].append(leaf_gp_id) #connection added to the chosen tower
-					if len(phase1_connect_dict[min_dist_node]) >= P1_CONNECTION_LIMIT:
-						phase1_list = [u for u in phase1_list if u != min_dist_node] #Remove tower if it has max connections
-					
-				problem_cases = [u for u in problem_cases if u != leaf_gp_id]
+# 				#print "New TCSR:::",Tcsr
+# 				# sys.exit()
 
-		connect_flag = 'TOWER'
-
-
-		while  True:
-			if connect_flag == 'TOWER':
-				link = make_tower_connection(None,sattelite_reco_list,towers_list,adjMats[0],reqTP_mat,status2)
-			else:
-				link = make_phase1_connection(None,sattelite_reco_list,phase1_list,adjMats[0],reqTP_mat,status2)
-			
-			if link == {}:
-					if connect_flag == 'TOWER':
-						connect_flag = "PHASE1"
-						continue
-					else:
-						break
-			else:
-				leaf_gp_index = int(link.keys()[0].split(',')[1])
-				leaf_gp_id = link.keys()[0]
-				min_arial_dist = 100000000000000
-				for x in link[leaf_gp_id]:
-					arial_dist = latlongdist(LatLong[status2[leaf_gp_index]],LatLong[x])
-					if arial_dist < min_arial_dist:
-						min_arial_dist = arial_dist
-						min_dist_node = x
-
-				if connect_flag == 'TOWER':
-					print "Satellite Case Connected to Tower::",min_dist_node,leaf_gp_id
-					tower_connect_dict[min_dist_node].append(leaf_gp_id) #connection added to the chosen tower
-					if len(tower_connect_dict[min_dist_node]) >= TOWER_CONNECTION_LIMIT:
-						towers_list = [u for u in towers_list if u != min_dist_node] #Remove tower if it has max connections
-				else:
-					print "Satellite Case Connected to Phase1::",min_dist_node,leaf_gp_id
-					phase1_connect_dict[min_dist_node].append(leaf_gp_id) #connection added to the chosen tower
-					if len(phase1_connect_dict[min_dist_node]) >= P1_CONNECTION_LIMIT:
-						phase1_list = [u for u in phase1_list if u != min_dist_node] #Remove tower if it has max connections
-					
-				sattelite_reco_list = [u for u in sattelite_reco_list if u != leaf_gp_id]
-
-		connect_flag = 'TOWER'
-
-		gp_list_in_tree = list()
-
-		for z in tree_with_wireless.keys():
-
-			# print "tree before wireless",len(olt_assigned_dict[z])
-			while True:
-
-				curr_leaf_nodes = [x for x in tree_with_wireless[z].keys() if tree_with_wireless[z][x][2]==[] and float(reqTP_mat[int(x.split(',')[1])]) <= 6250.0]
-				curr_leaf_nodes = [x for x in curr_leaf_nodes if Phase_lists[0][status2[int(x.split(',')[1])]] != 15]
-
-				if connect_flag == 'TOWER':
-					link = make_tower_connection(tree_with_wireless[z],curr_leaf_nodes,towers_list,adjMats[0],reqTP_mat,status2,'TREE')
-				else:
-					link = make_phase1_connection(tree_with_wireless[z],curr_leaf_nodes,phase1_list,adjMats[0],reqTP_mat,status2,'TREE')
-				
-				if link == {}:
-						if connect_flag == 'TOWER':
-							connect_flag = "PHASE1"
-							continue
-						else:
-							break
-				else:
-					leaf_gp_index = int(link.keys()[0].split(',')[1])
-					leaf_gp_id = link.keys()[0]
-					min_arial_dist = 100000000000000
-					for x in link[leaf_gp_id]:
-						# print "X = ",x 
-						# print LatLong[status2[x]]
-						arial_dist = latlongdist(LatLong[status2[leaf_gp_index]],LatLong[x])
-						if arial_dist < min_arial_dist:
-							min_arial_dist = arial_dist
-							min_dist_node = x
-
-					if connect_flag == 'TOWER':
-						tower_connect_dict[min_dist_node].append(leaf_gp_id) #connection added to the chosen tower
-						if len(tower_connect_dict[min_dist_node]) >= TOWER_CONNECTION_LIMIT:
-							towers_list = [u for u in towers_list if u != min_dist_node] #Remove tower if it has max connections
-					else:
-						phase1_connect_dict[min_dist_node].append(leaf_gp_id) #connection added to the chosen tower
-						if len(phase1_connect_dict[min_dist_node]) >= P1_CONNECTION_LIMIT:
-							phase1_list = [u for u in phase1_list if u != min_dist_node] #Remove tower if it has max connections
+# 				for l in range(len(bhqsindx)):
+# 					if tree_dist[l][i] < 1000000: #Error Handling
+# 						print "====ERROR in tree_dist update===",j,l,i,tree_dist[l][i]
+# 						sys.exit()
 						
-					leaf_gp_parent = tree_with_wireless[z][leaf_gp_id][0]
-					tree_with_wireless[z][leaf_gp_parent][2] = [u for u in tree_with_wireless[z][leaf_gp_parent][2] if u != leaf_gp_id] 
-					del tree_with_wireless[z][leaf_gp_id]
-					tree_with_wireless[z] = prun_leaf_wps(tree_with_wireless[z])
+# 					tree_dist[l][i] = tree_dist[l][k] + new_association[i][1]
+
+
+# 		print tree_dist[0], len(tree_dist[0])
+# 		#min_route_length = [None]*len(tree_dist[0])
+# 		min_route_length = [10000000000 for x in range(len(tree_dist[0]))]
+# 		olt_assigned = [bhq for x in range(len(tree_dist[0]))] #initial bhq assigned for those GPs which are 
+# 		problem_cases = [x for x in range(len(tree_dist[0])) if (tree_dist[bhqsindx.index(bhq)][x] > MAX_ROUTE_LENGTH and tree_dist[bhqsindx.index(bhq)][x] < 1000000)]
+# 		sys.exit()
+
+# 		#for l in range(len(tree_dist[0])):
+# 			# for i in range(len(bhqsindx)):
+# 			#     min_route_length[l] = min([tree_dist[i][l],min_route_length[l]])
+# 		while True:
+# 			res_cases = []
+# 			max_res = -1
+# 			max_res_index = 0  
+# 			print "Problem Cases",problem_cases
+			  
+# 			for i in range(len(bhqsindx)):
+# 				res_cases.append([x for x in problem_cases if tree_dist[i][x]< MAX_ROUTE_LENGTH])
+# 				print res_cases[i]
+
+# 					#if tree_dist[i][l] > MAX_ROUTE_LENGTH and min_route_length[l] < 1000000:
+# 					# if (int(l) == 124):
+# 					#     print "Road Distance", road_dist(LatLong[status2[l]],LatLong[status2[bhqsindx[i]]],state,dist
+# 				# if min_route_length[l] > MAX_ROUTE_LENGTH and min_route_length[l] < 1000000:
+# 				#     print "Can not be less than 60",l,LatLong[status2[l]],LatLong[status2[bhqsindx[i]]]
+# 				#     #problem_cases.append(l)
+			
+# 				if len(res_cases[i]) > max_res:
+# 					max_res_index = i
+# 					max_res = len(res_cases[i])
+
+# 			if res_cases[max_res_index] == []:
+# 				break
+# 			else:
+# 				problem_cases = [x for x in problem_cases if x not in res_cases[max_res_index]]
+# 				all_olts.append(bhqsindx[max_res_index])
+
+# 		print "Final OLT List -----------",all_olts 
+# 		for l in problem_cases:
+# 			print "Putting problem case in file ---->",l
+# 			f9.write(str(dist)+","+str(GP_lists[0][status2[l]])+","+str(GP_Names[0][status2[l]])+","+str(LatLong[status2[l]][0])+","+str(LatLong[status2[l]][1])+",Suspect LatLong\n")
+# 			# res_cases.index(max([len(x) for x in res_cases])) 
+# 		olt_connect = dict() 
+# 		for olt in all_olts:
+# 			olt_connect.update({olt:[]})
+
+# 		for l in range(len(tree_dist[0])):
+# 			min_olt = 0
+# 			min_tree_dist = 100000000000000
+# 			#if (l not in problem_cases) or (tree_dist[bhqsindx.index(bhq)][l] >= 1000000): 
+# 			if (l not in problem_cases) and (tree_dist[bhqsindx.index(bhq)][l] < 1000000): #All OLTs with distance less than 40Km
+# 				for olt in all_olts:
+# 					olt_index = bhqsindx.index(olt)
+# 					if (tree_dist[olt_index][l] < min_tree_dist):
+# 						min_tree_dist = tree_dist[olt_index][l]
+# 						min_olt = olt
+# 				olt_connect[min_olt].append(l)
+# 				min_route_length[l] = min_tree_dist
+# 				f10.write(str(j)+","+str(GP_lists[0][status2[min_olt]])+','+str(GP_Names[0][status2[min_olt]])+","+str(LatLong[status2[min_olt]][0])+","+str(LatLong[status2[min_olt]][1])+','+str(GP_lists[0][status2[l]])+","+str(GP_Names[0][status2[l]])+","+str(LatLong[status2[l]][0])+","+str(LatLong[status2[l]][1])+','+str(min_tree_dist/1000)+'\n')
+# 		print "OLT Connect======", olt_connect
+
+
+
+# 		#exit()        
+
+# 		# for i in range(len(tree_dist)):
+# 		#     ucount = 0
+# 		#     if i == over_sixty.index(min(over_sixty)):
+# 		#         continue
+# 		#     else:    
+# 		#         for l in range(len(tree_dist[0])):
+# 		#             min_route_length[l] = min([])
+# 		#             print "Vinoo I came here!!!"
+# 		#             if tree_dist[0][l] > MAX_ROUTE_LENGTH and tree_dist[i][l] < MAX_ROUTE_LENGTH:
+# 		#                 ucount += 1
+# 		#                 print l ,tree_dist[0][l],tree_dist[2][l]
+# 		#     print "counting difference in nodes ------------",i,ucount        
+# 		# # sys.exit()
+# 		#print "bhq ===================================================",bhqsindx[bhq],blkx_distx[bhqsindx[bhq]]
+# 		# ,str(GP_lists[0][blkx_distx[bhqsindx[bhq]]])
+# 		# ,str(GP_Names[0][blkx_distx[bhqsindx[bhq]]]),str(LatLong[blkx_distx[bhqsindx[bhq]]][0]),str(LatLong[blkx_distx[bhqsindx[bhq]]][1])
+# 		#exit()
+
+# 		for l in range(len(status2)):#unconnected because route length > 1000km or unable to connect from any OLT
+# 			if (tree_dist[bhqsindx.index(bhq)][l] >= 1000000):
+# 				f8.write(str(GP_Names[0][status2[l]])+','+str(GP_lists[0][status2[l]])+','+str(j)+','+str(LatLong[status2[l]][0])+','+str(LatLong[status2[l]][1])+','+str(reqTP_mat[status2[l]])+',Road data not found\n')
+# 				Tcsr[l,:] = 0
+# 				Tcsr[:,l] = 0
+# 				Tcsr[int(bhq),l] = 0.0001 #Required in wireless connectivity function
+# 				continue
+# 			elif (l in problem_cases):
+# 				f8.write(str(GP_Names[0][status2[l]])+','+str(GP_lists[0][status2[l]])+','+str(j)+','+str(LatLong[status2[l]][0])+','+str(LatLong[status2[l]][1])+','+str(reqTP_mat[status2[l]])+',Too far from block HQ\n')
+# 				Tcsr[l,:] = 0
+# 				Tcsr[:,l] = 0
+# 				Tcsr[int(bhq),l] = 0.0001 #Required in wireless connectivity function
+# 				continue
+
+# 			for m in range(len(status2)):
+# 				if Tcsr[l][m] > 0:
+# 					if min_route_length[l] < 1000000 and min_route_length[m] < 1000000:
+# 						for i in all_olts:
+# 							if (l in olt_connect[i]) and (m in olt_connect[i]):
+# 								#f5.write(str(j)+','+str(latlong_dict_array[j][l][0])+','+str(latlong_dict_array[j][l][1])+','+str(latlong_dict_array[j][m][0])+','+str(latlong_dict_array[j][m][1])+','+str(Tcsr[l][m]/1000)+'\n'),
+# 								f5.write(str(j)+','+str(LatLong[status2[l]][0])+','+str(LatLong[status2[l]][1])+','+str(LatLong[status2[m]][0])+','+str(LatLong[status2[m]][1])+','+str(Tcsr[l][m]/1000)+'\n'),
+
+
+# 		# print "bhq ===================================================",bhqsindx[bhq],blkx_distx[bhqsindx[bhq]],str(GP_lists[0][blkx_distx[bhqsindx[bhq]]]),str(GP_Names[0][blkx_distx[bhqsindx[bhq]]]),str(LatLong[blkx_distx[bhqsindx[bhq]]][0]),str(LatLong[blkx_distx[bhqsindx[bhq]]][1])
+# 		#exit()
+
+# 		#f10.write()
+
+# 		# sys.exit()
+# 		# Block_MST.append(Tcsr)
+# 		#print Tcsr
+# 		# print Orig_Tcsr
+# 		distan=Tcsr.sum()
+# 		distan_all = distan
+# 		if(distan !=0):
+# 			maxi=Tcsr.max()
+# 			f3.write(str(j)+','+str(distan/1000)+'km,'+str(maxi/1000)+'km,' + str(max([x for x in min_route_length if x < 1000000.0 ])/1000)+'km' + ','+ str(len(all_olts)) +'\n')
+# 		#sys.exit()
+# 		limit_leafnode_iterations = 0
+# 		while(1):#what 200
+# 			limit_leafnode_iterations += 1
+# 			#print "iteration======",limit_leafnode_iterations
+# 			conn=connectwls(Tcsr,j)
+# 			if (conn==0):
+# 				break;
+# 			if limit_leafnode_iterations >= 100:
+# 				print "Warning: No of iterations for removing leaf nodes in the mst has crosses limit = 200, please ckeck the code"
+# 				exit()
+
+# 		# print "reduced mst after removing connected leafnodes"  
+# 		# satellite_test = []      
+# 		# for l in range(len(status2)):
+# 		# 	if (min_route_length[l]>=1000000 and int(Phase_lists[0][status2[l]]) == 2):
+# 		# 		satellite_test.append(l)
+
+
+# 		# satellite_recommendation(satellite_test)	
+# 		# exit()	
+
+
+
+
+# 		max_reduced_route_len = 0
+# 		for l in range(len(status2)):
+# 			if l in problem_cases and int(Phase_lists[0][status2[l]]) == 2:
+# 				Phase_lists[0][status2[l]]=30
+# 				print "Node discarded",j,l
+# 				continue
+# 			elif(min_route_length[l]>=1000000 and int(Phase_lists[0][status2[l]]) == 2):            	
+# 				f4.write(str(j)+','+str(GP_lists[0][status2[l]])+','+str(GP_Names[0][status2[l]])+ ',' +str(LatLong[status2[l]][0]) + ',' +str(LatLong[status2[l]][1])+','+str(reqTP_mat[status2[l]])+'\n')
+# 				Phase_lists[0][status2[l]]=20
+# 				print "Node for Satellite", j,l 
+# 				continue
 			
 
-			############### stats #############		
-			
+# 			for m in range(len(status2)):
+# 				if Tcsr[l][m] > 0:
+# 					if min_route_length[l] < 1000000 and min_route_length[m] < 1000000:
+# 						if Tcsr[l][m] >= 1000000:
+# 							print "ERROR:: link length > 1000Km", l,m,Tcsr
+# 							sys.exit()
+# 						#f7.write(str(j)+','+str(latlong_dict_array[j][l][0])+','+str(latlong_dict_array[j][l][1])+','+str(latlong_dict_array[j][m][0])+','+str(latlong_dict_array[j][m][1])+','+str(Tcsr[l][m]/1000)+'\n')    
+# 						f7.write(str(j)+','+str(LatLong[status2[l]][0])+','+str(LatLong[status2[l]][1])+','+str(LatLong[status2[l]][0])+','+str(LatLong[status2[l]][1])+','+str(Tcsr[l][m]/1000)+'\n')    
 
-			# for key,values in tower_connect_dict.items():	#connected to towers	
-			# 	print "tower",key,len(values),values
-			# 	conctd_to_towers += len(values)
-			# 	for x in values:
-			# 			conctd_to_tower_gps.append([x, block_phase[j][status2[(int(x.split(',')[1]))]]])
-			# print "\n\n\nconctd to towers ", conctd_to_tower_gps		
-			# conctd_to_towers = len([ x for x in conctd_to_tower_gps if x[1]!=15 ] )
-			# # print "\n\n\nno of ph1 gps concted to ph1",len([ x for x in conctd_to_ph1_gps if x[1]!=15 ])
-			# print "\n\n\nno of gps concted to tower", conctd_to_towers
+# 						max_reduced_route_len = max(max_reduced_route_len,min_route_length[l],min_route_length[m])
 
-			
+# 		distan=Tcsr.sum()
+# 		if(distan !=0):
+# 			maxi=Tcsr.max()
+# 			#print "Maximum length for Block",blocks[j],"= ",maxi/1000,"km"
 
-			# for key,values in phase1_connect_dict.items():  #connected to ph1
-			# 	if len(values) > 0:		
-			# 		print "phse1", key,len(values),values
-			# 		for x in values:
-			# 			conctd_to_ph1_gps.append([x, block_phase[j][status2[(int(x.split(',')[1]))]]])
-			# 		# conctd_to_ph1_gps = [ x, block_phase[j][status2[(int(x[1].split(',')[1]))]] for x in values  if x==x ]  
-			# print "\n\n\nconctd tp phase1 ", conctd_to_ph1_gps		
-			# conctd_to_ph1 = len([ x for x in conctd_to_ph1_gps if x[1]!=15 ] )
-			# # print "\n\n\nno of ph1 gps concted to ph1",len([ x for x in conctd_to_ph1_gps if x[1]!=15 ])
-			# print "\n\n\nno of phase1 concted gps", conctd_to_ph1
-
-
-			# No_of_Prb_cases = len([ x for x in problem_cases if x[1]!=15 or x[0]!= 'wp'] )
-			No_of_Prb_cases = len(problem_cases)
-			print "Prob case gps,No of prob cases",problem_cases,No_of_Prb_cases
-
-
-
-			############ stats ####################	
-
-			gp_list_olt_connctns = [x for x in tree_with_wireless[z].keys() if x.split(',')[0] == 'gp' and Phase_lists[0][status2[int(x.split(',')[1])]] != 15]				
-			gp_list_in_tree += [x for x in tree_with_wireless[z].keys() if x.split(',')[0] == 'gp' and Phase_lists[0][status2[int(x.split(',')[1])]] != 15]
-			
-
-			z_id = int(z.split(',')[1])
-			for gp in gp_list_olt_connctns:
-				gp_id = int(gp.split(',')[1])
-				f10.write(str(j)+","+str(GP_lists[0][status2[z_id]])+','+str(GP_Names[0][status2[z_id]])+","+str(LatLong[status2[z_id]][0])+","+str(LatLong[status2[z_id]][1])+','+str(GP_lists[0][status2[gp_id]])+","+str(GP_Names[0][status2[gp_id]])+","+str(LatLong[status2[gp_id]][0])+","+str(LatLong[status2[gp_id]][1])+','+str((tree_with_wireless[z][gp][3])/1000)+'\n')
-
+# 			f6.write(str(j)+','+str(distan/1000)+'km,'+str(maxi/1000)+'km,' + str(max_reduced_route_len/1000)+'km,'+str((distan_all-distan)/1000)+'km,'+str(len(all_olts))+'\n')
 		
-		fibre_len = 0
-		max_route_length = 0
+# 		dist_olts += len(all_olts)
+# # Block Loop Ends #
 
-		for z in tree_with_wireless.keys():
-			mst_link_list = list()
-			for x in tree_with_wireless[z].keys():
-				if max_route_length < tree_with_wireless[z][x][3]:
-					max_route_length = tree_with_wireless[z][x][3]
-				if tree_with_wireless[z][x][2] != []:
-					for y in tree_with_wireless[z][x][2]:
-						mst_link_list.append([x,y])
-						fibre_len += int(tree_with_wireless[z][y][1])
-				
-			
-			for x in mst_link_list:
-				x_from = x[0].split(',')[0]
-				x_to = x[1].split(',')[0]
-				gp_from_name = ' '
-				gp_to_name = ' ' 
-				
-				if x_from == 'wp':
-					from_latlong =  block_waypoints_list[int(x[0].split(',')[1])]
-				
-				elif x_from == 'gp':
-					from_latlong = LatLong[status2[(int(x[0].split(',')[1]))]]
-					gp_from_name = GP_Names[0][status2[(int(x[0].split(',')[1]))]]
-				
-				if x_to == 'wp':
-					to_latlong =  block_waypoints_list[int(x[1].split(',')[1])]
-				
-				elif x_to == 'gp':
-					to_latlong = LatLong[status2[int(x[1].split(',')[1])]]
-					gp_to_name = GP_Names[0][status2[(int(x[1].split(',')[1]))]]
-				
-					
+# 	for k in range(NODE):
+# 		f1.write(str(GP_Names[0][k]) + ',' +str(GP_lists[0][k]) + ',' + str(LatLong[k][0]) + ',' + str(LatLong[k][1]) + ',' + str(Phase_lists[0][k]) +','+ str(tower_height[k]) + '\n')
 
+# 	#print "Phasssesssss2=---\n",Phase_lists
+# 	#exit()
 
-				f7.write(str(j)+ ", " + gp_from_name +',' + str(from_latlong[0]) + ", "+ str(from_latlong[1]) + "," + gp_to_name + ',' + str(to_latlong[0]) + "," +str(to_latlong[1]) +',' + str("{:0.2f}".format(float(tree_with_wireless[z][x[1]][1]/1000.0))) + '\n' )
-		# print "fibre len ",(fibre_len)/1000		
-		f6.write(str(j)+','+str(fibre_len/1000)+'km,'+ str(max_route_length/1000)+'km,'+str((fibre_all_len - fibre_len)/1000)+'km,'+str(len(all_olts))+'\n')	
-
-		for z in tower_connect_dict.keys():
-			if len(tower_connect_dict[z]) > 0:
-				from_latlong = LatLong[z]
-				for x in tower_connect_dict[z]:
-					x_id = int(x.split(',')[1])
-					to_latlong = LatLong[status2[x_id]]
-					gp_to_name = GP_Names[0][status2[x_id]]
-					# f7.write(str(j)+ ", " + gp_from_name +',' + str(from_latlong[0]) + ", "+ str(from_latlong[1]) + "," + gp_to_name + ',' + str(to_latlong[0]) + "," +str(to_latlong[1]) +',' + str(latlongdist(from_latlong,to_latlong)) + '\n' )	
-
-		# dist_satellite_gps += sattelite_reco_list
-		for s in sattelite_reco_list:
-			s_id = int(s.split(',')[1])
-			f4.write(str(j)+','+str(GP_lists[0][status2[s_id]])+','+str(GP_Names[0][status2[s_id]])+ ',' +str(LatLong[status2[s_id]][0]) + ',' +str(LatLong[status2[s_id]][1])+','+str(reqTP_mat[status2[s_id]])+'\n')
-		
-		for p in problem_cases:
-			p_id = int(p.split(',')[1])
-			f8.write(str(GP_Names[0][status2[p_id]])+','+str(GP_lists[0][status2[p_id]])+','+str(j)+','+str(LatLong[status2[p_id]][0])+','+str(LatLong[status2[p_id]][1])+','+str(reqTP_mat[status2[p_id]])+',Too far from bhqs\n')
-		# dist_problem_case_gps += problem_cases	
-
-		# f.write(str(GP_Names[0][m]) + ',' +str(GP_lists[0][m]) + ','+str(Block_code[m])+',' +str(LatLong[m][0]) + ',' +str(LatLong[m][1]) + ',' +str(Phase_lists[0][status2[gp_id]]) + ',' + str(transHeight_mat[m][gp])+','+str(throughPut_mat[m][gp]) +','+str(GP_Names[0][gp]) + ',' +str(GP_lists[0][gp]) + ',' +str(blk_code)+','+str(LatLong[gp][0]) + ',' +str(LatLong[gp][1]) + ',' +str(Phase_lists[0][gp]) + ','+ str(receivHeight_mat[m][gp]) +',' +'\n' )
-
-		tot_onts += len(gp_list_in_tree)
-
-		tot_olts += len(all_olts)
-		
-		tot_satel_recmdns += len(sattelite_reco_list) #prasanna
-		
-		for x,y in tower_connect_dict.items():
-			for gp in y:
-				gp_id = int(gp.split(',')[1])	
-				if tower_height[x] < transHeight_mat[x][[status2[gp_id]]]:
-					tower_height[x] = transHeight_mat[x][[status2[gp_id]]]
-
-		block_tot_conctd_to_towers = 0
-		for x,y in tower_connect_dict.items():
-			print "tower",x
-			block_tot_conctd_to_towers += len(y)
-			# x_id = x.split(',')[1]
-			print "\n\n\n\ntower details",GP_Names[0][x],GP_lists[0][x]
-			if len(y) > 0:	
-				for gp in y:
-					gp_id = int(gp.split(',')[1])
-					# f.write(str(GP_Names[0][[x]]) + ',' +str(GP_lists[0][[x]]) + ','+str(j)+',' +str(LatLong[x][0]) + ',' +str(LatLong[x][1]) + ',' +str(Phase_lists[0][x]) + ',' + str(transHeight_mat[x][status2[gp_id]])+','+str(throughPut_mat[x][status2[gp_id]]) +','+str(GP_Names[0][status2[gp_id]]) + ',' +str(GP_lists[0][status2[gp_id]]) + ',' +str(j)+','+str(LatLong[status2[gp_id]][0]) + ',' +str(LatLong[status2[gp_id]][1]) + ',' +str(Phase_lists[0][status2[gp_id]]) + ','+ str(receivHeight_mat[x][status2[gp_id]]) +',' +'\n' )
-					f.write(str(GP_Names[0][x]) + ',' +str(GP_lists[0][x]) + ','+str(j)+',' +str(LatLong[x][0]) + ',' +str(LatLong[x][1]) + ',' +str(Phase_lists[0][x]) + ',' + str(tower_height[x][0])+','+str(throughPut_mat[x][status2[gp_id]]) +','+str(GP_Names[0][status2[gp_id]]) + ',' +str(GP_lists[0][status2[gp_id]]) + ',' +str(j)+','+str(LatLong[status2[gp_id]][0]) + ',' + str(LatLong[status2[gp_id]][1]) + ',' +str(Phase_lists[0][status2[gp_id]]) + ','+ str(receivHeight_mat[x][status2[gp_id]]) +',' +'\n' )
-
-
-		for x,y in phase1_connect_dict.items():
-			for gp in y:
-				gp_id = int(gp.split(',')[1])	
-				if tower_height[x] < transHeight_mat[x][[status2[gp_id]]]:
-					tower_height[x] = transHeight_mat[x][[status2[gp_id]]]
-
-
-		block_tot_conctd_to_ph1=0
-		for x,y in phase1_connect_dict.items():
-			block_tot_conctd_to_ph1 += len(y)
-			# x_id = x.split(',')[1]
-			if len(y) > 0:
-				for gp in y:
-					gp_id = int(gp.split(',')[1])
-					# f.write(str(GP_Names[0][x]) + ',' +str(GP_lists[0][x]) + ','+str(j)+',' +str(LatLong[x][0]) + ',' +str(LatLong[x][1]) + ',' +str(Phase_lists[0][status2[x]]) + ',' + str(transHeight_mat[m][x])+','+str(throughPut_mat[m][gp_id]) +','+str(GP_Names[0][gp_id]) + ',' +str(GP_lists[0][gp_id]) + ',' +str(j)+','+str(LatLong[gp_id][0]) + ',' +str(LatLong[gp_id][1]) + ',' +str(Phase_lists[0][gp_id]) + ','+ str(receivHeight_mat[m][gp_id]) +',' +'\n' )
-					f.write(str(GP_Names[0][x]) + ',' +str(GP_lists[0][x]) + ','+str(j)+',' +str(LatLong[x][0]) + ',' +str(LatLong[x][1]) + ',' +str(Phase_lists[0][x]) + ',' + str(tower_height[x][0])+','+str(throughPut_mat[x][status2[gp_id]]) +','+str(GP_Names[0][status2[gp_id]]) + ',' +str(GP_lists[0][status2[gp_id]]) + ',' +str(j)+','+str(LatLong[status2[gp_id]][0]) + ',' + str(LatLong[status2[gp_id]][1]) + ',' +str(Phase_lists[0][status2[gp_id]]) + ','+ str(receivHeight_mat[x][status2[gp_id]]) +','+'\n' )
-		tot_conctd_to_towers += block_tot_conctd_to_towers
-		tot_conctd_to_ph1 += block_tot_conctd_to_ph1
-		tot_problem_cases += len(problem_cases)
-
-		#print "Total GP's "
-
-		#########################################
-		# Stats for debugging 
-		########################################
-
-		block_tot_ph2_gps = len([u for u in block_phase[j].keys() if block_phase[j][u] == 2])
-		block_tot_problem_cases = len(problem_cases)
-		block_tot_satel_recmdns = len(sattelite_reco_list)
-		check_tot = 0
-		check_tot += block_tot_satel_recmdns+block_tot_conctd_to_ph1+block_tot_conctd_to_towers+block_tot_problem_cases
-		check_tot += len(gp_list_in_tree)
-
-		if check_tot != block_tot_ph2_gps:
-			print "Big Problem... Debug this Block::",j
-			print "Phase 2 Gps = ",block_tot_ph2_gps,[u for u in block_phase[j].keys() if block_phase[j][u] == 2]
-			print "Problem Cases = ", block_tot_problem_cases,problem_cases
-			print "Satellite Reco = ",block_tot_satel_recmdns,sattelite_reco_list
-			print "GPs in tree = ",len(gp_list_in_tree),gp_list_in_tree
-			print "GPs connected to Towers = ",block_tot_conctd_to_towers
-			
-			block_tot_conctd_to_towers_list = list()
-			for x,y in tower_connect_dict.items():
-				block_tot_conctd_to_towers_list += y
-			print block_tot_conctd_to_towers_list
-
-			print "GPs connected to Phase 1 = ",block_tot_conctd_to_ph1
-			block_tot_conctd_to_ph1_list=list()
-			for x,y in phase1_connect_dict.items():
-				block_tot_conctd_to_ph1_list += y
-			print block_tot_conctd_to_ph1_list
-
-			sys.exit()
-
-
-
-	print "Total Number of Phase 2 GPs", tot_ph2_gps
-
-	tot_ph1_gps = len([x for x in range(len(Phase_lists[0])) if int(Phase_lists[0][x]) == 21])
-	tot_rural_exgs = len([x for x in range(len(Phase_lists[0])) if int(Phase_lists[0][x]) == 15])
-	tot_towers = len([x for x in range(len(Phase_lists[0])) if int(Phase_lists[0][x]) == 9])
-	tot_ph2_gps = len([x for x in range(len(Phase_lists[0])) if int(Phase_lists[0][x]) == 2])
-
+# 	p1 = 0
+# 	t=0
+# 	rex=0
+# 	blhq=0
+# 	tp=0
+# 	p1c=0
+# 	cont=0
+# 	nfibre=0
+# 	satr=0
+# 	pr_cases=0
+# 	for i in range(NODE):
+# 		if Phase_lists[0][i] == 21:
+# 			p1+=1
+# 		elif Phase_lists[0][i] == 15:
+# 			rex+=1
+# 		elif Phase_lists[0][i] == 9:
+# 			t+=1
+# 		elif Phase_lists[0][i] == 19:
+# 			blhq+=1  
+# 		elif Phase_lists[0][i] == 22:
+# 			print "connected to phase 1 (wireless)"
+# 			p1c+=1 
+# 		elif Phase_lists[0][i] == 10:
+# 			print "connected to phase 9 (wireless tower)"
+# 			cont+=1 
+# 		elif Phase_lists[0][i] == 2 or Phase_lists[0][i] == 3 :
+# 			nfibre+=1
+# 		elif Phase_lists[0][i] == 20:
+# 			satr+=1
+# 		elif Phase_lists[0][i] == 30:
+# 			pr_cases+=1        
+# 	p2=cont+p1c+nfibre+satr+pr_cases
 	
-
-	
-	
-	f2.write(str(input_file)+','+str(tot_ph1_gps)+','+str(tot_ph2_gps)+','+str(tot_rural_exgs)+','+str(tot_towers)+','+str(tot_conctd_to_ph1)+','+str(tot_conctd_to_towers)+','+str(tot_satel_recmdns)+','+str(tot_onts)+','+str(tot_olts)+','+str(tot_problem_cases)+'\n')
-
-
-
+# 	f2.write(str(input_file)+','+str(p1)+','+str(p2)+','+str(rex)+','+str(t)+','+str(p1c)+','+str(cont)+','+str(satr)+','+str(nfibre)+','+str(dist_olts)+','+str(pr_cases)+'\n')
 # 	print ("Closing everything!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 # 	#closeall()
 	
 # 	# print dist_olts
 # 	# sys.exit()
 
-
+def removecsv(dis_code):
+    for filename in os.listdir("input"):
+        print filename
+        if filename.startswith(str(dis_code)):
+            os.rename("input/"+str(dis_code)+".csv","input/"+str(dis_code))
 
 for file in os.listdir("input"):
 	if file.endswith(".csv"):
 		do_something(file.split(".")[0])
-	#sys.exit()
+		removecsv(file.split(".")[0])
 
 print "Congratulations IITB Team for the AWESOME results!!!!"
 

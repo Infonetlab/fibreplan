@@ -1,6 +1,5 @@
 import sys
 from collections import defaultdict, deque
-from pse_2 import latlongdist,get_elevation_profile
 # from spt_test 
 MAX_ROUTE_LENGTH = 20000
 
@@ -241,7 +240,6 @@ def get_leaf_nodes(all_links_in_mst,count):
 
 
 def prun_leaf_wps(tree_dict): #removes wp's which are leaf nodes
-
     flag = True
     while flag:
         flag = False
@@ -250,7 +248,6 @@ def prun_leaf_wps(tree_dict): #removes wp's which are leaf nodes
             if (x_type == 'wp' and len(tree_dict[x][2])==0): #wp is a leaf node and we need to remove it
                 flag = True #Need one more iteration
                 x_parent = tree_dict[x][0]
-                # print x,x_parent
                 tree_dict[x_parent][2] = [y for y in tree_dict[x_parent][2] if y != x] #remove x from the children list of its parent
                 del tree_dict[x]
     return tree_dict
@@ -260,7 +257,7 @@ def prun_leaf_wps(tree_dict): #removes wp's which are leaf nodes
 def fibre_saved_if_wireless(tree_dict,node): #returns length of fibre saved if the gp is connected wirelessly
     
     node_type = node.split(',')[0]
-    node_id = int(node.split(',')[1])
+    node_id = node.split(',')[1]
 
     fibre_saved = 0
     flag = True
@@ -268,9 +265,6 @@ def fibre_saved_if_wireless(tree_dict,node): #returns length of fibre saved if t
 
     if node_type == 'wp':
         print "fibre_saved_if_wireless:::: WP is not a valid input!!",node
-        sys.exit()
-    elif tree_dict[node][2] != []:
-        print "fibre_saved_if_wireless:::: node is not a leaf node!!",node
         sys.exit()
     else:
         while flag:
@@ -283,8 +277,6 @@ def fibre_saved_if_wireless(tree_dict,node): #returns length of fibre saved if t
                 curr_node = parent
 
     return fibre_saved
-
-
                 
 
 def handle_no_road_cases(tree_dict,gp_latlng_list,wp_latlng_list,blk_dist_map,state,dist):
@@ -301,7 +293,7 @@ def handle_no_road_cases(tree_dict,gp_latlng_list,wp_latlng_list,blk_dist_map,st
             else:
                 flag = True
                 x_type = x.split(',')[0]
-                x_id = int(x.split(',')[1])
+                x_id = x.split(',')[1]
                 if x_type == 'gp':
                     x_latlng = gp_latlng_list[blk_dist_map[x_id]]
                 else:
@@ -309,11 +301,11 @@ def handle_no_road_cases(tree_dict,gp_latlng_list,wp_latlng_list,blk_dist_map,st
 
                 min_arial_dist = 10000000000000000000
                 for y in tree_dict.keys():
-                    if x == y or tree_dict[y][3] >= 1000000:
+                    if x == y or tree_dict[y][3] > 1000000:
                         continue
                     else:
                         y_type = y.split(',')[0]
-                        y_id = int(y.split(',')[1])
+                        y_id = y.split(',')[1]
                         if y_type == 'gp':
                             y_latlng = gp_latlng_list[blk_dist_map[y_id]]
                         else:
@@ -323,15 +315,10 @@ def handle_no_road_cases(tree_dict,gp_latlng_list,wp_latlng_list,blk_dist_map,st
                         if xy_dist < min_arial_dist:
                             min_arial_dist = xy_dist
                             min_dist_id = y
-
-                y = min_dist_id
-                y_type = y.split(',')[0]
-                y_id = int(y.split(',')[1])
                 
-                
-                if min_arial_dist <= 5000 and satellite_recommendation(x_latlng,y_latlng,state,dist): #Update tree dictionary
+                if min_arial_dist <= 2000 and satellite_recommendation(x_latlng,y_latlng,state,dist): #Update tree dictionary
                     x_parent = tree_dict[x][0]
-                    if x_parent != y or tree_dict[y][0] == None:
+                    if x_parent != y:
                         tree_dict[x_parent][2] = [z for z in tree_dict[x_parent][2] if z != x] 
                         #remove x from children list of its parent (detach x from its parent)
                         tree_dict[y][2].append(x) #add x to children list of y (attach x to y)
@@ -340,7 +327,7 @@ def handle_no_road_cases(tree_dict,gp_latlng_list,wp_latlng_list,blk_dist_map,st
                         tree_dict[x][2] = [] # x has no children. Not required, put for safety
                         tree_dict[x][3] = tree_dict[y][3]+min_arial_dist # update x's route length from bhq
                     else:
-                        print "handle_no_road_cases:::: This can not happen!!!",x,y,tree_dict
+                        print "handle_no_road_cases:::: This can not happen!!!",x,y
                         sys.exit()
                 else:
                     satellite_reco_list.append(x) #recomment x for satellite
@@ -362,138 +349,3 @@ def satellite_recommendation(to_latlng,from_latlng,state,dist):
             return True 
 
         return False
-
-
-
-def get_tree_distance(from_node,to_node,tree_dict):
-    #Returns the distance along the tree between nodes from_node and to_node
-    #Should not get unconnected nodes
-    
-    if from_node == to_node:
-        return 0
-
-    from_node_ancestors = [from_node]
-    to_node_ancestors = [to_node]
-
-    last_from_node_ancestor = from_node
-    last_to_node_ancestor = to_node
-
-    #k = 0
-    common_ancestor = None
-
-    for k in range(len(tree_dict.keys())):
-        
-        parent = tree_dict[last_from_node_ancestor][0] #Process from node
-        #print "from node parent == ",parent
-        if parent != None: #lowest common ancestor found
-            if parent in to_node_ancestors:
-                common_ancestor = parent
-                break
-            else:
-                last_from_node_ancestor = parent #Update the last ancestor processed
-                from_node_ancestors.append(parent) #Update the ancestors' list
-
-        parent = tree_dict[last_to_node_ancestor][0] #Process to node
-        #print "to node parent == ",parent
-        
-        if parent != None: #lowest common ancestor found
-            if parent in from_node_ancestors:
-                common_ancestor = parent
-                break
-            else:
-                last_to_node_ancestor = parent #Update the last ancestor processed
-                to_node_ancestors.append(parent) #Update the ancestors' list
-
-    if common_ancestor == None:
-        print "get_tree_distance:::: Common Ancestor can not be None!!!",from_node,to_node
-        sys.exit()
-    else:
-        return tree_dict[from_node][3]+tree_dict[to_node][3]-2*tree_dict[common_ancestor][3] #returns tree distance
-
-
-
-def get_te_route_length(tree_dict,te_id):
-    #Returns dictionary {node_id:route_length from te_id}
-
-    #print "get_te_route_length:::: te_id = ",te_id
-    route_length_dict = dict()
-
-    if tree_dict[te_id][0] == None and len(tree_dict[te_id][2]) > 0: 
-    # te_id is the original bhq
-        for x in tree_dict.keys():
-            route_length_dict.update({x:tree_dict[x][3]})
-    else: #some other TE
-        for x in tree_dict.keys():
-            route_length_dict.update({x:get_tree_distance(te_id,x,tree_dict)})
-
-    #print "get_te_route_length:::: Route Length Dict = ",route_length_dict, len(route_length_dict)
-
-    return route_length_dict
-
-
-
-def make_rooted_tree(node,tree_dict,nodes_tobe_connected,olt_tree,process_nodes_list):
-
-    #Node - current node from where links will be made
-    #tree_dict - Original tree rooted at bhq
-    #nodes_tobe_connected - list of [nodes,distance from current olt] those are closest to the current olt
-    #olt_tree - object being built recursievely and will eventually be returned
-    #process_node_lists - list of candidate nodes to be considerd
-    if node not in olt_tree.keys():
-        print "make_rooted_tree:::: Node not in tree!!", node,olt_tree
-        sys.exit()
-
-    for x in process_nodes_list:
-        temp_list = [y for y in nodes_tobe_connected if y[0] == x]
-        if len(temp_list) == 1: #Add node x to the tree
-            process_x_list = [y for y in tree_dict[x][2] if y != node]
-            
-            if x in tree_dict[node][2]:
-                olt_tree.update({x:[node,tree_dict[x][1],[],float(temp_list[0][1])]})
-            elif node in tree_dict[x][2]:
-                olt_tree.update({x:[node,tree_dict[node][1],[],float(temp_list[0][1])]})
-                process_x_list.append(tree_dict[x][0])
-            else:
-                sys.exit()
-            olt_tree[node][2].append(x)
-            olt_tree = make_rooted_tree(x,tree_dict,nodes_tobe_connected,olt_tree,process_x_list)
-            #return olt_tree
-        elif len(temp_list) == 0:
-            #return olt_tree
-            print "Do nothing!!"
-        else:
-            print "make_rooted_tree:::: Not possible!!!"
-            sys.exit()
-
-    return olt_tree
-
-
-def remove_nodes_from_tree(tree_dict,remove_list):
-
-    flag = True
-    tree_nodes = tree_dict.keys()
-    while flag:
-        flag = False
-        for x in remove_list:
-            if x not in tree_nodes:
-                continue
-            if tree_dict[x][0] == None:
-                print "ERROR::Can not remove root!!!!!"
-                sys.exit()
-            elif tree_dict[x][2] == []: #x is a leaf node
-                flag = True
-                x_parent = tree_dict[x][0]
-                tree_dict[x_parent][2] = [u for u in tree_dict[x_parent][2] if u!= x]
-                del tree_dict[x]
-                remove_list = [u for u in remove_list if u != x]
-        tree_dict = prun_leaf_wps(tree_dict)
-
-    return tree_dict
-                
-
-
-
-
-
-
-
