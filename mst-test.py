@@ -19,7 +19,7 @@ from maps_blk import road_dist_block,road_dist_block_file
 from sptgraph import spt,print_mst_links,build_Tcsr,fibre_saved_if_wireless,handle_no_road_cases,prun_leaf_wps
 from pse_2 import latlongdist
 from copy import copy, deepcopy
-from directions import get_waypoints
+from directions import get_waypoints,build_latlng_dict
 ########################################
 
 
@@ -433,22 +433,31 @@ def do_something(input_file):
 		
 		print "Number of GPs::::",len(status2)
 		road_d=[]
+		latlng_in_file_dict = build_latlng_dict(state,dist,j)
 		for l in range(len(status2)):
 			road_dr=[]
 			for m in range(len(status2)):
 				if(l>=m):
 					road_dr.append(0.0)
 				else:
+					sum_latlng = LatLong[status2[l]][0] + LatLong[status2[l]][1] + LatLong[status2[m]][0] + LatLong[status2[m]][1]
 					try:
-						wp_list,dis=get_waypoints(LatLong[status2[l]],LatLong[status2[m]],state,dist,j)
-					except IOError, e:
-						if e.errno == 101 or e.errno == 'socket error' or e.errno == -3 or e.errno == 2:
-							print "Network Error"
-							time.sleep(1)
+						x = latlng_in_file_dict[sum_latlng]
+						wp_list = x[0]
+						dis = x[1]
+						#print "FOUND WAYPOINTS FROM THE DICT!!!!!!!!!!!!!!!!!!!!!!!!"
+					except KeyError:
+						try:
 							wp_list,dis=get_waypoints(LatLong[status2[l]],LatLong[status2[m]],state,dist,j)
-						else:
-							raise    
-					
+						except IOError, e:
+							if e.errno == 101 or e.errno == 'socket error' or e.errno == -3 or e.errno == 2:
+								print "Network Error"
+								time.sleep(1)
+								wp_list,dis=get_waypoints(LatLong[status2[l]],LatLong[status2[m]],state,dist,j)
+							else:
+								raise
+						latlng_in_file_dict.update({sum_latlng:[wp_list,dis]})    
+						
 					if dis == 0.1: #same coordinates 
 						print "Possible???", l,m,LatLong[status2[l]],LatLong[status2[m]],str(GP_Names[0][status2[m]]),str(GP_lists[0][status2[m]])
 						f9.write(str(dist)+","+str(GP_lists[0][status2[m]])+","+str(GP_Names[0][status2[m]])+","+str(LatLong[status2[m]][0])+","+str(LatLong[status2[m]][1])+",Duplicate LatLong\n")
@@ -491,18 +500,23 @@ def do_something(input_file):
 			x_list = min_curr_road_d_key.split(',')
 			x_latlong = [float(x_list[1]),float(x_list[2])] #latlong of waypoint with the curr min distance
 
+			sum_latlng = x_latlong[0] + x_latlong[1] + LatLong[status2[int(x_list[0])]][0] + LatLong[status2[int(x_list[0])]][1]
 			try:
-				#print "distance not there in file"
-				waypoints_list,d = get_waypoints(x_latlong,LatLong[status2[int(x_list[0])]],state,dist,j) 
-			except IOError, e:
-				if e.errno == 101 or e.errno == 'socket error' or e.errno == -3 or e.errno == 2:
-					print "Network Error"
-					time.sleep(1)
-					waypoints_list,d = get_waypoints(x_latlong,LatLong[status2[int(x_list[0])]],state,dist,j) 
-				else:
-					raise
-
-
+				x = latlng_in_file_dict[sum_latlng]
+				waypoints_list = x[0]
+				d = x[1]
+			except KeyError:
+				try:
+					waypoints_list,d=get_waypoints(x_latlong,LatLong[status2[int(x_list[0])]],state,dist,j)
+				except IOError, e:
+					if e.errno == 101 or e.errno == 'socket error' or e.errno == -3 or e.errno == 2:
+						print "Network Error"
+						time.sleep(1)
+						waypoints_list,d=get_waypoints(x_latlong,LatLong[status2[int(x_list[0])]],state,dist,j)
+					else:
+						raise
+				latlng_in_file_dict.update({sum_latlng:[waypoints_list,d]})    
+			
 
 			print "Waypoints List:::",waypoints_list
 			
@@ -517,18 +531,27 @@ def do_something(input_file):
 			for x,y in road_d_min.items():
 				rd_min = y
 				gp_latlong = LatLong[status2[int(x.split(',')[0])]] # Waypoint order does not matter
+
+
 				
 				for l in waypoints_list:
+
+					sum_latlng = gp_latlong[0] + gp_latlong[1] + l[0] + l[1]
 					try:
-						#print "distance not there in file"
-						wp_temp,rd = get_waypoints(gp_latlong,l,state,dist,j)
-					except IOError, e:
-						if e.errno == 101 or e.errno == 'socket error' or e.errno == -3 or e.errno == 2:
-							print "Network Error"
-							time.sleep(1)
-							wp_temp,rd = get_waypoints(gp_latlong,l,state,dist,j)
-						else:
-							raise 
+						z = latlng_in_file_dict[sum_latlng]
+						wp_temp = z[0]
+						rd = z[1]
+					except KeyError:
+						try:
+							wp_temp,rd=get_waypoints(gp_latlong,l,state,dist,j)
+						except IOError, e:
+							if e.errno == 101 or e.errno == 'socket error' or e.errno == -3 or e.errno == 2:
+								print "Network Error"
+								time.sleep(1)
+								wp_temp,rd=get_waypoints(gp_latlong,l,state,dist,j)
+							else:
+								raise
+						latlng_in_file_dict.update({sum_latlng:[wp_temp,rd]})    
 					
 					#rd = road_dist_block(gp_latlong,l,state,dist,j,KEY)
 					if rd < rd_min:

@@ -6,7 +6,7 @@ import sys
 import urllib
 import os
 import time
-from maps_blk import road_dist_block,update_road_dist
+from maps_blk import road_dist_block #,update_road_dist
 from pse_2 import latlongdist
 from goapi import sign_url
 import hashlib
@@ -25,7 +25,6 @@ def get_waypoints(orig_coord,dest_coord,state,dist,blok):
 	#print "Get Waypoints::::",orig_coord,dest_coord
 	for keyname in os.listdir("key"):
 			if keyname.endswith(str('finish')):
-				print keyname
 				continue
 			else:
 				fo = open("key/"+str(keyname), "r+")
@@ -152,22 +151,17 @@ def get_waypoints(orig_coord,dest_coord,state,dist,blok):
 			print "STATUS != OK... CHECK\n\n\n\n\n\n\n\n",f['status']
 			print f
 			sys.exit()
-		#  	try:
-		#  		get_waypoints(orig_coord,dest_coord,state,dist,blok,key)
-		# 	except:
-		# 		print "Jassi ye Nahi Maan rha :::Kuch Karo",sys.exit()
-		# print "get_waypoints:::number of waypoints = ",len(f['routes'][0]['legs'][0]['steps'])
 		
 		
-		if llength < 1:
-			print "Jassi do something error in getting waypoints!!!!",orig_coord,dest_coord
-			# road_dist_block(orig_coord,dest_coord,state,dist,blok,key,1000000)
-			dis = road_dist_block(orig_coord,dest_coord,state,dist,blok,key)
-			fw1 = open('waypoints/waypoints_eps_'+str(int(blok))+'.csv','a+')
-			fw1.write(str(orig_coord[0])+','+str(orig_coord[1])+','+str(dest_coord[0])+','+str(dest_coord[1])+'\n')
-			fw1.close()
-			return [dest_coord],dis
-			#sys.exit()
+		# if llength < 1:
+		# 	print "Jassi do something error in getting waypoints!!!!",orig_coord,dest_coord
+		# 	# road_dist_block(orig_coord,dest_coord,state,dist,blok,key,1000000)
+		# 	dis = road_dist_block(orig_coord,dest_coord,state,dist,blok,key)
+		# 	fw1 = open('waypoints/waypoints_eps_'+str(int(blok))+'.csv','a+')
+		# 	fw1.write(str(orig_coord[0])+','+str(orig_coord[1])+','+str(dest_coord[0])+','+str(dest_coord[1])+'\n')
+		# 	fw1.close()
+		# 	return [dest_coord],dis
+		# 	#sys.exit()
 		
 		wp_list = [dest_coord]
 		print "get_waypoints::: wp_list initial value",wp_list
@@ -225,7 +219,7 @@ def get_waypoints(orig_coord,dest_coord,state,dist,blok):
 			print "get_waypoints::: distance between two gp's-",f['routes'][0]['legs'][0]['distance']['value'],latlongdist(wp_latlong,dest_coord)		
 			print "update road sit is called for - ",orig_coord,dest_coord
 			print "Entering Update_oad_dist ::::",llength,orig_coord,dest_coord,float(f['routes'][0]['legs'][0]['distance']['value'])+add_dist
-			update_road_dist(orig_coord,dest_coord,state,dist,blok,float("{:0.2f}".format(float(f['routes'][0]['legs'][0]['distance']['value'])+add_dist)))
+			road_dist_block(orig_coord,dest_coord,state,dist,blok,float("{:0.2f}".format(float(f['routes'][0]['legs'][0]['distance']['value'])+add_dist)))
 		else:
 			formatted_distance = float("{:0.2f}".format(float(f['routes'][0]['legs'][0]['steps'][llength-1]['distance']['value'])))
 			print "Entering Road_dist_block ::::",llength,start_pt,dest_coord,formatted_distance
@@ -234,7 +228,7 @@ def get_waypoints(orig_coord,dest_coord,state,dist,blok):
 		print "get_waypoints::: distance between two gp's-",f['routes'][0]['legs'][0]['distance']['value'],latlongdist(wp_latlong,dest_coord)		
 		print "update road sit is called for - ",orig_coord,dest_coord
 		print "Entering Update_oad_dist ::::",llength,orig_coord,dest_coord,float(f['routes'][0]['legs'][0]['distance']['value'])+add_dist
-		update_road_dist(orig_coord,dest_coord,state,dist,blok,float("{:0.2f}".format(float(f['routes'][0]['legs'][0]['distance']['value'])+add_dist)))
+		road_dist_block(orig_coord,dest_coord,state,dist,blok,float("{:0.2f}".format(float(f['routes'][0]['legs'][0]['distance']['value'])+add_dist)))
 	
 
 
@@ -258,6 +252,28 @@ def get_waypoints(orig_coord,dest_coord,state,dist,blok):
 						else:
 							raise    
 		return wp_list,d
+
+def build_latlng_dict(state,dist,block):
+	latlng_dict = dict()
+	if not os.path.exists('distfile'):
+		os.makedirs('distfile')
+	fo = open('distfile/distFile_'+str(state)+'_'+str(dist)+'_'+str(block), 'a+')
+
+	tokens = fo.readlines()
+	fo.close()
+
+	if len(tokens) == 0:
+		return {}
+	else:
+		for li in tokens:
+			token = li.split(',')
+			from_latlng = [float(token[0]),float(token[1])]
+			to_latlng = [float(token[2]),float(token[3])]
+			sum_latlng = float(token[0]) + float(token[1]) + float(token[2]) + float(token[3])
+			latlng_dict.update({sum_latlng:get_waypoints(to_latlng,from_latlng,state,dist,block)})
+	return latlng_dict
+
+
 
 
 
