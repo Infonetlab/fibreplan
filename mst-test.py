@@ -52,14 +52,19 @@ upper_limit = 100000
 NUM_ZERO_HOP=0
 NUMT_ZERO_HOP=0
 NUM_FIRST_HOP=0
-MAX_ROUTE_LENGTH = 20000
+<<<<<<< HEAD
 
-# KEY = 'AIzaSyDdsmMA1aSpiIVewLgVwI7yQRX75HU8P4M' #sep 16
-#KEY = 'AIzaSyBfGkszQRgiwDN1goVkgppD03OX4VTyHUw' #mahak over 15th sep
-# KEY = 'AIzaSyAlDTGjI1cpakNk--iQnAbcqrjL6H-ml5w' #jassi over sep16
-# KEY = 'AIzaSyCJGl8CM0alUexg3bfCIEf0bIDmid-Cz4A' #jassi over 15th sep
-# #KEY = 'AIzaSyCOqlyD9aAXpeVoFYMGQ0sAJpn3LSxbwiY' #mahak new
-KEY = 'AIzaSyC-E7Tfs7fEA3eGe9i0qLBHE_KJDhlbnIs' #mahak new
+=======
+MAX_ROUTE_LENGTH = 50000
+GUARD_DISTANCE = 30000
+BETA = 0.5
+
+#KEY = 'AIzaSyBOynBGgDTlSNZCTO4_n9vvSrP9rk6zB4w'
+
+
+
+
+>>>>>>> 0fdb1756875f015ed71d4c081089605f53ee20d7
 # near_limit = 300
 # rear_limit = 2000
 ########################################
